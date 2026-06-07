@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>M-Pesa Payment</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      --green: #00a550;
+      --green-dark: #007a3d;
+      --text: #1a1a1a;
+      --text-light: #6b7280;
+      --border: #e5e7eb;
+      --bg: #f9fafb;
+      --card: #ffffff;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      width: 100%;
+      max-width: 480px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background: var(--green);
+      padding: 2rem;
+      color: white;
+      text-align: center;
+    }
+
+    .card-header h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .card-header p {
+      font-size: 0.875rem;
+      opacity: 0.9;
+    }
+
+    .card-body {
+      padding: 2rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 1rem;
+      color: var(--text);
+      transition: all 0.2s;
+      background: white;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(0, 165, 80, 0.1);
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: var(--text-light);
+      margin-top: 0.35rem;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 0.875rem;
+      background: var(--green);
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn:hover {
+      background: var(--green-dark);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .status-box {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      display: none;
+    }
+
+    .status-box.info {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+    }
+
+    .status-box.success {
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+
+    .status-box.error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+
+    .status-box.cancelled {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
+
+    .receipt-info {
+      margin-top: 0.75rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(0,0,0,0.1);
+      font-weight: 500;
+    }
+
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .details {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #f9fafb;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      color: var(--text-light);
+      line-height: 1.5;
+    }
+
+    .details strong {
+      display: block;
+      margin-bottom: 0.25rem;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <h1>M-Pesa Payment</h1>
+    <p>Complete your transaction securely</p>
+  </div>
+
+  <div class="card-body">
+    <div class="form-group">
+      <label for="phone">Phone Number</label>
+      <input type="text" id="phone" placeholder="0712345678 or 254712345678" />
+      <div class="hint">Test number: 254708374149</div>
+    </div>
+
+    <div class="form-group">
+      <label for="amount">Amount (KES)</label>
+      <input type="number" id="amount" placeholder="Enter amount" min="1" step="1" />
+      <div class="hint">Minimum amount: 1 KES</div>
+    </div>
+
+    <div class="form-group">
+      <label for="reference">Reference</label>
+      <input type="text" id="reference" value="HotelPayment001" />
+    </div>
+
+    <button class="btn" id="payBtn">
+      Pay with M-Pesa
+      <div class="spinner" id="spinner"></div>
+    </button>
+
+    <div id="statusBox" class="status-box"></div>
+
+    <div class="details">
+      <strong>Payment Information</strong>
+      After clicking pay, you will receive a prompt on your phone to enter your M-Pesa PIN.
+      Transaction status will update automatically once completed.
+    </div>
+  </div>
+</div>
+
+<script>
+  let pollInterval = null;
+
+  function setStatus(type, message, receipt = null, amount = null, phone = null) {
+    const box = document.getElementById("statusBox");
+    box.className = `status-box ${type}`;
+    
+    let html = `<p>${message}</p>`;
+    
+    if (receipt && type === 'success') {
+      html += `
+        <div class="receipt-info">
+          Receipt Number: ${receipt}<br>
+          Amount: KES ${amount}<br>
+          Phone: ${phone}
+        </div>
+      `;
+    }
+    
+    box.innerHTML = html;
+    box.style.display = "block";
+  }
+
+  function setLoading(loading) {
+    const btn = document.getElementById("payBtn");
+    const spinner = document.getElementById("spinner");
+    btn.disabled = loading;
+    spinner.style.display = loading ? "block" : "none";
+  }
+
+  async function initiatePayment() {
+    const phone = document.getElementById("phone").value.trim();
+    const amount = document.getElementById("amount").value.trim();
+    const reference = document.getElementById("reference").value.trim();
+
+    if (!phone || !amount) {
+      setStatus("error", "Please enter both phone number and amount.");
+      return;
+    }
+
+    if (isNaN(amount) || amount < 1) {
+      setStatus("error", "Please enter a valid amount (minimum 1 KES).");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("info", "Sending payment request...");
+
+    try {
+      const response = await fetch("/api/mpesa/pay/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          phone_number: phone, 
+          amount: parseInt(amount), 
+          reference: reference 
+        }),
+      });
+      
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        setStatus("error", data.error || data.message || "Payment request failed.");
+        setLoading(false);
+        return;
+      }
+
+      setStatus("info", "Payment request sent. Waiting for confirmation...");
+      
+      const checkoutId = data.checkout_request_id;
+      
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+      
+      pollInterval = setInterval(() => pollStatus(checkoutId), 3000);
+
+    } catch (error) {
+      setStatus("error", "Network error. Please check your connection.");
+      setLoading(false);
+    }
+  }
+
+  async function pollStatus(checkoutId) {
+    try {
+      const response = await fetch(`/api/mpesa/status/${checkoutId}/`);
+      const data = await response.json();
+
+      if (data.status === "Completed") {
+        clearInterval(pollInterval);
+        setLoading(false);
+        setStatus(
+          "success", 
+          "Payment confirmed successfully!", 
+          data.mpesa_receipt, 
+          data.amount, 
+          data.phone_number
+        );
+      } else if (data.status === "Failed") {
+        clearInterval(pollInterval);
+        setLoading(false);
+        setStatus("error", `Payment failed: ${data.result_desc || "Transaction failed"}`);
+      } else if (data.status === "Cancelled") {
+        clearInterval(pollInterval);
+        setLoading(false);
+        setStatus("cancelled", `Payment cancelled: ${data.result_desc || "Transaction cancelled"}`);
+      }
+      
+    } catch (error) {
+      // Silent fail - continue polling
+      console.log("Polling error:", error);
+    }
+  }
+
+  // Attach event listener
+  document.getElementById("payBtn").addEventListener("click", initiatePayment);
+</script>
+
+</body>
+</html>
