@@ -106,3 +106,4 @@ def payment_status(request, checkout_request_id):
         })
     except MpesaTransaction.DoesNotExist:
         return JsonResponse({"error": "Transaction not found."}, status=404)
+    

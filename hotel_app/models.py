@@ -1,5 +1,6 @@
 from django.db import models
 
+#mpesa models
 class MpesaTransaction(models.Model):
     STATUS_CHOICES = [
         ("Pending",   "Pending"),
@@ -24,3 +25,30 @@ class MpesaTransaction(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+#end of mpesa models
+##ROOM models
+class Room(models.Model):
+    ROOM_TYPES = [
+        ('single', 'Single'),
+        ('double', 'Double'),
+        ('suite', 'Suite'),
+        ('family', 'Family'),
+    ]
+
+    room_number = models.CharField(max_length=10, unique=True)
+    room_type = models.CharField(max_length=20, choices=ROOM_TYPES)
+    price_per_night = models.DecimalField(max_digits=10, decimal_places=2)
+    max_guests = models.IntegerField()
+    description = models.TextField(blank=True)
+    amenities = models.TextField(blank=True, help_text="WiFi, TV, AC, Minibar")
+    is_active = models.BooleanField(default=True)
+    image = models.ImageField(upload_to='rooms/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['room_number']
+
+    def __str__(self):
+        return f"Room {self.room_number} - {self.room_type}"
+#end of room models
