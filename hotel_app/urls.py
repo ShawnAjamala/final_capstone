@@ -1,4 +1,6 @@
 from django.urls import path, include
+from django.http import JsonResponse
+from django.shortcuts import render
 from hotel_app import room_views
 from hotel_app.auth_views import (
     RegisterView, LoginView, LogoutView, CurrentUserView,
@@ -9,8 +11,33 @@ from hotel_app.admin_views import (
     ApproveStaffView, RejectStaffView
 )
 
+
+### ==================== PUBLIC DASHBOARD ====================
+def public_dashboard(request):
+    return JsonResponse({
+        'hotel': 'Grand Horizon Hotel',
+        'welcome': 'Discover luxury and comfort in the heart of the city.',
+        'services': ['Rooms', 'Restaurant', 'Conference Rooms', 'Event Venues'],
+        'links': {
+            'register': '/api/auth/register/',
+            'login': '/api/auth/login/',
+        }
+    })
+
+
+### ==================== MPESA TEST PAGE ====================
+def mpesa_test_page(request):
+    return render(request, "mpesa_test.html")
+
+
 urlpatterns = [
-    ### ==================== MPESA (DO NOT TOUCH) ====================
+    ### ==================== HOME ====================
+    path('', public_dashboard, name='home'),
+
+    ### ==================== MPESA TEST PAGE ====================
+    path("mpesa-test/", mpesa_test_page, name="mpesa_test"),
+
+    ### ==================== MPESA API (DO NOT TOUCH) ====================
     path("api/mpesa/", include("hotel_app.mpesa_urls")),
 
     ### ==================== AUTH ====================

@@ -7,10 +7,10 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField(label='Email Address')
     password = serializers.CharField(
         min_length=6, write_only=True, style={'input_type': 'password'},
-        help_text='Staff must use: 111111', label='Password'
+        label='Password'
     )
     role = serializers.ChoiceField(
-        choices=[('guest', 'Guest'), ('staff', 'Staff')],
+        choices=[('guest', 'Guest'), ('staff', 'Staff'), ('admin', 'Admin')],
         default='guest', label='Account Role'
     )
 
@@ -18,8 +18,7 @@ class RegisterSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(label='Username')
     password = serializers.CharField(
-        write_only=True, style={'input_type': 'password'},
-        help_text='Staff: 111111 | Admin: 000000', label='Password'
+        write_only=True, style={'input_type': 'password'}, label='Password'
     )
 
 ### ==================== END OF AUTH SERIALIZERS ====================
