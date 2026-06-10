@@ -1,26 +1,36 @@
 from django.urls import path, include
-from django.shortcuts import render
-from hotel_app import room_views, auth_views
-
-def mpesa_test_page(request):
-    return render(request, "mpesa_test.html")
+from hotel_app import room_views
+from hotel_app.auth_views import (
+    RegisterView, LoginView, LogoutView, CurrentUserView,
+    GuestDashboardView, StaffDashboardView
+)
+from hotel_app.admin_views import (
+    AdminDashboardView, UserListView, PendingStaffView,
+    ApproveStaffView, RejectStaffView
+)
 
 urlpatterns = [
-    path("", mpesa_test_page, name="mpesa_test"),
+    ### ==================== MPESA (DO NOT TOUCH) ====================
     path("api/mpesa/", include("hotel_app.mpesa_urls")),
 
-    # Auth
-    path('api/auth/register/', auth_views.register_user, name='register'),
-    path('api/auth/login/', auth_views.login_user, name='login'),
-    path('api/auth/logout/', auth_views.logout_user, name='logout'),
-    path('api/auth/me/', auth_views.current_user, name='current_user'),
+    ### ==================== AUTH ====================
+    path('api/auth/register/', RegisterView.as_view(), name='register'),
+    path('api/auth/login/', LoginView.as_view(), name='login'),
+    path('api/auth/logout/', LogoutView.as_view(), name='logout'),
+    path('api/auth/me/', CurrentUserView.as_view(), name='current_user'),
 
-    # Role dashboards
-    path('api/guest/dashboard/', auth_views.guest_dashboard, name='guest_dashboard'),
-    path('api/staff/dashboard/', auth_views.staff_dashboard, name='staff_dashboard'),
-    path('api/dashboard/', auth_views.any_dashboard, name='any_dashboard'),
+    ### ==================== DASHBOARDS ====================
+    path('api/guest/dashboard/', GuestDashboardView.as_view(), name='guest_dashboard'),
+    path('api/staff/dashboard/', StaffDashboardView.as_view(), name='staff_dashboard'),
+    path('api/admin/dashboard/', AdminDashboardView.as_view(), name='admin_dashboard'),
 
-    # Rooms
+    ### ==================== ADMIN USER MANAGEMENT ====================
+    path('api/admin/users/', UserListView.as_view(), name='admin_users'),
+    path('api/admin/staff/pending/', PendingStaffView.as_view(), name='admin_pending_staff'),
+    path('api/admin/staff/approve/', ApproveStaffView.as_view(), name='admin_approve_staff'),
+    path('api/admin/staff/reject/', RejectStaffView.as_view(), name='admin_reject_staff'),
+
+    ### ==================== ROOMS ====================
     path('api/rooms/', room_views.room_list, name='room_list'),
     path('api/rooms/available/', room_views.room_available, name='room_available'),
     path('api/rooms/<int:room_id>/', room_views.room_detail, name='room_detail'),

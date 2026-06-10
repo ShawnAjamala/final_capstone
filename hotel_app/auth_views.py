@@ -1,167 +1,159 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.renderers import JSONRenderer, BrowsableAPIRenderer
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserProfile
-from .permissions import IsGuest, IsStaff
+from .permissions import IsGuest, IsStaff, IsAdmin
+from .serializers import RegisterSerializer, LoginSerializer
 
 
-# Helper to generate JWT tokens
+### ==================== JWT TOKEN HELPER ====================
+# Creates JWT access + refresh tokens with role claim embedded.
+# Access: 24 hours | Refresh: 7 days
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
-    # Add custom claims
     refresh['role'] = user.profile.role if hasattr(user, 'profile') else 'guest'
-    return {
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-    }
+    return {'refresh': str(refresh), 'access': str(refresh.access_token)}
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def register_user(request):
-    """Register new user with JWT tokens returned"""
-    data = request.data
+### ==================== REGISTER VIEW ====================
+# PUBLIC — Anyone can register as guest or staff.
+# Admin role is NOT selectable. Admin is created via shell.
+# Staff registered here will have is_approved=False by default.
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+    renderer_classes = [JSONRenderer, BrowsableAPIRenderer]
 
-    username = data.get('username')
-    email = data.get('email')
-    password = data.get('password')
-    role = data.get('role', 'guest')
+    def get(self, request):
+        return Response({
+            'fields': {
+                'username': {'type': 'string', 'required': True},
+                'email': {'type': 'email', 'required': True},
+                'password': {'type': 'password', 'required': True, 'note': 'Staff use 111111'},
+                'role': {'type': 'choice', 'choices': ['guest', 'staff'], 'default': 'guest'}
+            }
+        })
 
-    if not username or not email or not password:
-        return Response(
-            {'error': 'username, email, and password required'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    if User.objects.filter(username=username).exists():
-        return Response({'error': 'Username already taken'}, status=status.HTTP_400_BAD_REQUEST)
+        username = serializer.validated_data['username']
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
+        role = serializer.validated_data.get('role', 'guest')
 
-    if User.objects.filter(email=email).exists():
-        return Response({'error': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
+        # Enforce staff password must be 111111
+        if role == 'staff' and password != '111111':
+            return Response({'error': 'Staff must use password: 111111'}, status=status.HTTP_400_BAD_REQUEST)
 
-    user = User.objects.create_user(username=username, email=email, password=password)
-    UserProfile.objects.create(user=user, role=role)
+        if User.objects.filter(username=username).exists():
+            return Response({'error': 'Username already taken'}, status=status.HTTP_400_BAD_REQUEST)
 
-    tokens = get_tokens_for_user(user)
+        if User.objects.filter(email=email).exists():
+            return Response({'error': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
 
-    return Response({
-        'message': 'Registration successful',
-        'tokens': tokens,
-        'user': {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'role': role,
-        }
-    }, status=status.HTTP_201_CREATED)
+        user = User.objects.create_user(username=username, email=email, password=password)
+        # Guests auto-approved, staff need admin approval
+        is_approved = True if role == 'guest' else False
+        UserProfile.objects.create(user=user, role=role, is_approved=is_approved)
+
+        tokens = get_tokens_for_user(user)
+
+        return Response({
+            'message': 'Registration successful',
+            'tokens': tokens,
+            'user': {'id': user.id, 'username': user.username, 'email': user.email, 'role': role}
+        }, status=status.HTTP_201_CREATED)
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def login_user(request):
-    """Login and return JWT tokens"""
-    data = request.data
+### ==================== LOGIN VIEW ====================
+# PUBLIC — Authenticates any user type.
+# Staff: password 111111 | Admin: password 000000 | Guest: their own password
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+    renderer_classes = [JSONRenderer, BrowsableAPIRenderer]
 
-    username = data.get('username')
-    password = data.get('password')
+    def get(self, request):
+        return Response({
+            'fields': {
+                'username': {'type': 'string', 'required': True},
+                'password': {'type': 'password', 'required': True, 'note': 'Staff: 111111 | Admin: 000000'}
+            }
+        })
 
-    if not username or not password:
-        return Response(
-            {'error': 'username and password required'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # Try normal auth first
-    user = authenticate(username=username, password=password)
+        username = serializer.validated_data['username']
+        password = serializer.validated_data['password']
 
-    # If normal auth fails, check staff with fixed password
-    if user is None:
-        try:
-            user = User.objects.get(username=username)
-            if hasattr(user, 'profile') and user.profile.role == 'staff' and password == '000000':
-                user.backend = 'django.contrib.auth.backends.ModelBackend'
-            else:
+        user = authenticate(username=username, password=password)
+
+        # Fallback for staff (111111) and admin (000000)
+        if user is None:
+            try:
+                user = User.objects.get(username=username)
+                if hasattr(user, 'profile'):
+                    if user.profile.role == 'staff' and password == '111111':
+                        user.backend = 'django.contrib.auth.backends.ModelBackend'
+                    elif user.profile.role == 'admin' and password == '000000':
+                        user.backend = 'django.contrib.auth.backends.ModelBackend'
+                    else:
+                        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+                else:
+                    return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            except User.DoesNotExist:
                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-        except User.DoesNotExist:
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
-    tokens = get_tokens_for_user(user)
-    role = user.profile.role if hasattr(user, 'profile') else 'guest'
+        tokens = get_tokens_for_user(user)
+        role = user.profile.role if hasattr(user, 'profile') else 'guest'
 
-    return Response({
-        'message': 'Login successful',
-        'tokens': tokens,
-        'user': {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'role': role,
-        }
-    })
+        return Response({
+            'message': 'Login successful',
+            'tokens': tokens,
+            'user': {'id': user.id, 'username': user.username, 'email': user.email, 'role': role}
+        })
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def logout_user(request):
-    """Blacklist refresh token"""
-    try:
-        refresh_token = request.data.get('refresh')
-        token = RefreshToken(refresh_token)
-        token.blacklist()
+### ==================== LOGOUT VIEW ====================
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
         return Response({'message': 'Logged out successfully'})
-    except:
-        return Response({'message': 'Logged out'}, status=status.HTTP_200_OK)
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def current_user(request):
-    """Get current user from JWT"""
-    user = request.user
-    role = user.profile.role if hasattr(user, 'profile') else 'guest'
+### ==================== CURRENT USER VIEW ====================
+class CurrentUserView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    return Response({
-        'user': {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'role': role,
-        }
-    })
+    def get(self, request):
+        user = request.user
+        role = user.profile.role if hasattr(user, 'profile') else 'guest'
+        return Response({
+            'user': {'id': user.id, 'username': user.username, 'email': user.email, 'role': role}
+        })
 
 
-# ==================== ROLE-PROTECTED TEST ENDPOINTS ====================
+### ==================== GUEST DASHBOARD ====================
+class GuestDashboardView(APIView):
+    permission_classes = [IsAuthenticated, IsGuest]
 
-@api_view(['GET'])
-@permission_classes([IsGuest])
-def guest_dashboard(request):
-    """Only guests can access"""
-    return Response({
-        'message': 'Welcome to Guest Dashboard',
-        'user': request.user.username
-    })
+    def get(self, request):
+        return Response({'message': 'Welcome to Guest Dashboard', 'user': request.user.username})
 
 
-@api_view(['GET'])
-@permission_classes([IsStaff])
-def staff_dashboard(request):
-    """Only staff can access"""
-    return Response({
-        'message': 'Welcome to Staff Dashboard',
-        'user': request.user.username
-    })
+### ==================== STAFF DASHBOARD ====================
+class StaffDashboardView(APIView):
+    permission_classes = [IsAuthenticated, IsStaff]
 
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def any_dashboard(request):
-    """Any authenticated user"""
-    role = request.user.profile.role if hasattr(request.user, 'profile') else 'guest'
-    return Response({
-        'message': f'Welcome {request.user.username}',
-        'role': role
-    })
+    def get(self, request):
+        return Response({'message': 'Welcome to Staff Dashboard', 'user': request.user.username})

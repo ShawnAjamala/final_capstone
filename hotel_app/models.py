@@ -1,6 +1,7 @@
 from django.db import models
 
-#mpesa models
+### ==================== MPESA MODELS (DO NOT TOUCH) ====================
+
 class MpesaTransaction(models.Model):
     STATUS_CHOICES = [
         ("Pending",   "Pending"),
@@ -25,8 +26,37 @@ class MpesaTransaction(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-#end of mpesa models
-##ROOM models
+
+### ==================== END OF MPESA MODELS ====================
+
+
+### ==================== AUTH MODELS ====================
+# UserProfile extends Django User with role and approval status.
+# PASSWORDS: Guest = any | Staff = 111111 | Admin = 000000
+# Staff must be approved by admin before accessing staff endpoints.
+
+from django.contrib.auth.models import User
+
+class UserProfile(models.Model):
+    ROLE_CHOICES = [
+        ('guest', 'Guest'),
+        ('staff', 'Staff'),
+        ('admin', 'Admin'),
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='guest')
+    phone = models.CharField(max_length=15, blank=True)
+    is_approved = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.role}"
+
+### ==================== END OF AUTH MODELS ====================
+
+
+### ==================== ROOM MODELS ====================
+
 class Room(models.Model):
     ROOM_TYPES = [
         ('single', 'Single'),
@@ -51,21 +81,5 @@ class Room(models.Model):
 
     def __str__(self):
         return f"Room {self.room_number} - {self.room_type}"
-#end of room models
-##Auth models code
-from django.contrib.auth.models import User
 
-class UserProfile(models.Model):
-    ROLE_CHOICES = [
-        ('guest', 'Guest'),
-        ('staff', 'Staff'),
-    ]
-
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='guest')
-    phone = models.CharField(max_length=15, blank=True)
-
-    def __str__(self):
-        return f"{self.user.username} - {self.role}"
-    #end of auth models
-    
+### ==================== END OF ROOM MODELS ====================
