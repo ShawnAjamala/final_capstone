@@ -131,3 +131,65 @@ class Booking(models.Model):
         return f"Booking #{self.id} - {self.guest.username} - Room {self.room.room_number}"
 
 ### ==================== END OF BOOKING MODEL ====================
+### ==================== RESTAURANT TABLE MODEL ====================
+# Represents a restaurant table that can be reserved.
+# Staff create and manage tables. Guests browse and reserve.
+# Tables are booked for a specific date + time slot.
+
+class RestaurantTable(models.Model):
+    table_number = models.CharField(max_length=10, unique=True)
+    capacity = models.IntegerField()  # How many people can sit
+    price_per_slot = models.DecimalField(max_digits=10, decimal_places=2)  # Price for the time slot
+    location = models.CharField(max_length=50, blank=True, help_text="Indoor, Terrace, Window, etc.")
+    is_active = models.BooleanField(default=True)
+    image = models.ImageField(upload_to='tables/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['table_number']
+
+    def __str__(self):
+        return f"Table {self.table_number} ({self.capacity} pax)"
+
+### ==================== END OF RESTAURANT TABLE MODEL ====================
+
+
+### ==================== TABLE BOOKING MODEL ====================
+# Links a guest to a table for a specific date and time slot.
+# Time slots prevent double-booking.
+# FLOW: Guest reserves → pending/unpaid → pays via M-Pesa → confirmed.
+# After reservation time ends, staff marks as completed → table available.
+
+class TableBooking(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('confirmed', 'Confirmed'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    PAYMENT_STATUS = [
+        ('unpaid', 'Unpaid'),
+        ('paid', 'Paid'),
+    ]
+
+    guest = models.ForeignKey(User, on_delete=models.CASCADE, related_name='table_bookings')
+    table = models.ForeignKey(RestaurantTable, on_delete=models.CASCADE, related_name='bookings')
+    reservation_date = models.DateField()
+    start_time = models.TimeField()  # e.g., 12:00
+    end_time = models.TimeField()    # e.g., 14:00
+    guests = models.IntegerField(default=1)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='unpaid')
+    mpesa_transaction = models.ForeignKey(MpesaTransaction, on_delete=models.SET_NULL, null=True, blank=True)
+    special_requests = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Table #{self.id} - {self.guest.username} - Table {self.table.table_number}"
