@@ -2,6 +2,7 @@ from django.urls import path, include
 from django.http import JsonResponse
 from django.shortcuts import render
 from hotel_app import room_views
+from hotel_app import table_views
 from hotel_app.auth_views import (
     RegisterView, LoginView, LogoutView, CurrentUserView,
     GuestDashboardView, StaffDashboardView
@@ -81,4 +82,17 @@ urlpatterns = [
     # Staff check-in / check-out
     path('api/rooms/<int:booking_id>/check-in/', room_views.check_in, name='check_in'),
     path('api/rooms/<int:booking_id>/check-out/', room_views.check_out, name='check_out'),
+
+
+ ### ==================== RESTAURANT TABLES ====================
+    path('api/tables/', table_views.table_list, name='table_list'),
+    path('api/tables/available/', table_views.table_available, name='table_available'),
+    path('api/tables/create/', table_views.table_create, name='table_create'),
+    path('api/tables/<int:table_id>/update/', table_views.table_update, name='table_update'),
+    path('api/tables/<int:table_id>/delete/', table_views.table_delete, name='table_delete'),
+    path('api/tables/reserve/', table_views.reserve_table, name='reserve_table'),
+    path('api/tables/my-bookings/', table_views.my_table_bookings, name='my_table_bookings'),
+    path('api/tables/<int:booking_id>/cancel/', table_views.cancel_table_booking, name='cancel_table_booking'),
+    path('api/tables/all-bookings/', table_views.all_table_bookings, name='all_table_bookings'),
+    path('api/tables/<int:booking_id>/complete/', table_views.complete_table_booking, name='complete_table_booking'),
 ]
