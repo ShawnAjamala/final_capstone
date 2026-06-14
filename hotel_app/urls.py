@@ -82,6 +82,10 @@ urlpatterns = [
     # Staff check-in / check-out
     path('api/rooms/<int:booking_id>/check-in/', room_views.check_in, name='check_in'),
     path('api/rooms/<int:booking_id>/check-out/', room_views.check_out, name='check_out'),
+    # Room booking deletion
+path('api/rooms/booking/<int:booking_id>/delete/', room_views.delete_booking, name='delete_booking'),
+path('api/rooms/my-booking/<int:booking_id>/delete/', room_views.delete_my_booking, name='delete_my_booking'),
+
 
 
  ### ==================== RESTAURANT TABLES ====================
@@ -95,4 +99,7 @@ urlpatterns = [
     path('api/tables/<int:booking_id>/cancel/', table_views.cancel_table_booking, name='cancel_table_booking'),
     path('api/tables/all-bookings/', table_views.all_table_bookings, name='all_table_bookings'),
     path('api/tables/<int:booking_id>/complete/', table_views.complete_table_booking, name='complete_table_booking'),
+# Table booking deletion
+path('api/tables/booking/<int:booking_id>/delete/', table_views.delete_table_booking, name='delete_table_booking'),
+path('api/tables/my-booking/<int:booking_id>/delete/', table_views.delete_my_table_booking, name='delete_my_table_booking'),
 ]

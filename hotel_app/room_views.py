@@ -330,4 +330,40 @@ def check_out(request, booking_id):
         'message': f'Guest checked out. Room {booking.room.room_number} is now available.',
         'booking_id': booking.id
     })
+### ==================== STAFF/ADMIN: DELETE BOOKING ====================
+# Only for completed or cancelled bookings. Active bookings cannot be deleted.
+@api_view(['DELETE', 'POST'])
+@permission_classes([IsAuthenticated, IsAdminOrStaff])
+def delete_booking(request, booking_id):
+    try:
+        booking = Booking.objects.get(id=booking_id)
+    except Booking.DoesNotExist:
+        return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    if booking.status in ['pending', 'confirmed', 'checked_in']:
+        return Response(
+            {'error': 'Cannot delete active booking. Cancel or check-out first.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    booking.delete()
+    return Response({'message': 'Booking deleted permanently'})
+
+
+### ==================== GUEST: DELETE MY COMPLETED BOOKING ====================
+@api_view(['DELETE', 'POST'])
+@permission_classes([IsAuthenticated, IsGuest])
+def delete_my_booking(request, booking_id):
+    try:
+        booking = Booking.objects.get(id=booking_id, guest=request.user)
+    except Booking.DoesNotExist:
+        return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if booking.status not in ['completed', 'cancelled']:
+        return Response(
+            {'error': 'Can only delete completed or cancelled bookings'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    booking.delete()
+    return Response({'message': 'Booking deleted'})

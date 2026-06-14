@@ -266,3 +266,40 @@ def complete_table_booking(request, booking_id):
     booking.status = 'completed'
     booking.save()
     return Response({'message': f'Table {booking.table.table_number} is now available.'})
+
+### ==================== STAFF/ADMIN: DELETE TABLE BOOKING ====================
+@api_view(['DELETE', 'POST'])
+@permission_classes([IsAuthenticated, IsAdminOrStaff])
+def delete_table_booking(request, booking_id):
+    try:
+        booking = TableBooking.objects.get(id=booking_id)
+    except TableBooking.DoesNotExist:
+        return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if booking.status in ['pending', 'confirmed']:
+        return Response(
+            {'error': 'Cannot delete active booking. Cancel or complete first.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    booking.delete()
+    return Response({'message': 'Table booking deleted permanently'})
+
+
+### ==================== GUEST: DELETE MY COMPLETED TABLE BOOKING ====================
+@api_view(['DELETE', 'POST'])
+@permission_classes([IsAuthenticated, IsGuest])
+def delete_my_table_booking(request, booking_id):
+    try:
+        booking = TableBooking.objects.get(id=booking_id, guest=request.user)
+    except TableBooking.DoesNotExist:
+        return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if booking.status not in ['completed', 'cancelled']:
+        return Response(
+            {'error': 'Can only delete completed or cancelled bookings'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    booking.delete()
+    return Response({'message': 'Table booking deleted'})
