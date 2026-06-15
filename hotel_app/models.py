@@ -193,3 +193,77 @@ class TableBooking(models.Model):
 
     def __str__(self):
         return f"Table #{self.id} - {self.guest.username} - Table {self.table.table_number}"
+    ### ==================== CONFERENCE ROOM MODEL ====================
+
+class ConferenceRoom(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    capacity = models.IntegerField()
+    price_per_hour = models.DecimalField(max_digits=10, decimal_places=2)
+    features = models.TextField(blank=True, help_text="Projector, Whiteboard, Video Conferencing, etc.")
+    additional_packages = models.TextField(blank=True, help_text="Catering: 500, Tech Support: 1000")
+    is_active = models.BooleanField(default=True)
+    image = models.ImageField(upload_to='conference/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.capacity} pax)"
+
+### ==================== END OF CONFERENCE ROOM MODEL ====================
+
+
+### ==================== CONFERENCE ROOM MODEL ====================
+class ConferenceRoom(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    capacity = models.IntegerField()
+    price_per_hour = models.DecimalField(max_digits=10, decimal_places=2)
+    features = models.TextField(blank=True, help_text="Projector, Whiteboard, Video Conferencing, etc.")
+    additional_packages = models.TextField(blank=True, help_text="Catering: 500, Tech Support: 1000")
+    is_active = models.BooleanField(default=True)
+    image = models.ImageField(upload_to='conference/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.capacity} pax)"
+
+
+### ==================== CONFERENCE BOOKING MODEL ====================
+class ConferenceBooking(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('confirmed', 'Confirmed'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    PAYMENT_STATUS = [
+        ('unpaid', 'Unpaid'),
+        ('paid', 'Paid'),
+    ]
+
+    guest = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conference_bookings')
+    conference_room = models.ForeignKey(ConferenceRoom, on_delete=models.CASCADE, related_name='bookings')
+    booking_date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    guests = models.IntegerField(default=1)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    selected_packages = models.TextField(blank=True, help_text="JSON list of selected packages")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='unpaid')
+    mpesa_transaction = models.ForeignKey(MpesaTransaction, on_delete=models.SET_NULL, null=True, blank=True)
+    special_requests = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Conference #{self.id} - {self.guest.username} - {self.conference_room.name}"

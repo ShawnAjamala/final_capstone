@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (
     MpesaTransaction, Room, Booking,
-    RestaurantTable, TableBooking, UserProfile
+    RestaurantTable, TableBooking, UserProfile,
+    ConferenceRoom, ConferenceBooking
 )
 
 @admin.register(MpesaTransaction)
@@ -33,4 +34,14 @@ class RestaurantTableAdmin(admin.ModelAdmin):
 @admin.register(TableBooking)
 class TableBookingAdmin(admin.ModelAdmin):
     list_display = ['id', 'guest', 'table', 'reservation_date', 'start_time', 'end_time', 'status']
+    list_filter = ['status', 'payment_status']
+
+@admin.register(ConferenceRoom)
+class ConferenceRoomAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'capacity', 'price_per_hour', 'is_active']
+    list_filter = ['is_active']
+
+@admin.register(ConferenceBooking)
+class ConferenceBookingAdmin(admin.ModelAdmin):
+    list_display = ['id', 'guest', 'conference_room', 'booking_date', 'start_time', 'end_time', 'status']
     list_filter = ['status', 'payment_status']

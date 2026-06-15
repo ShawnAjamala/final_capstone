@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from hotel_app import room_views
 from hotel_app import table_views
+from hotel_app import conference_views
 from hotel_app.auth_views import (
     RegisterView, LoginView, LogoutView, CurrentUserView,
     GuestDashboardView, StaffDashboardView
@@ -102,4 +103,21 @@ path('api/rooms/my-booking/<int:booking_id>/delete/', room_views.delete_my_booki
 # Table booking deletion
 path('api/tables/booking/<int:booking_id>/delete/', table_views.delete_table_booking, name='delete_table_booking'),
 path('api/tables/my-booking/<int:booking_id>/delete/', table_views.delete_my_table_booking, name='delete_my_table_booking'),
+
+### ==================== CONFERENCE ROOMS ====================
+path('api/conference/', conference_views.conference_list, name='conference_list'),
+path('api/conference/available/', conference_views.conference_available, name='conference_available'),
+path('api/conference/create/', conference_views.conference_create, name='conference_create'),
+path('api/conference/<int:room_id>/update/', conference_views.conference_update, name='conference_update'),
+path('api/conference/<int:room_id>/delete/', conference_views.conference_delete, name='conference_delete'),
+path('api/conference/book/', conference_views.conference_book, name='conference_book'),
+path('api/conference/my-bookings/', conference_views.my_conference_bookings, name='my_conference_bookings'),
+path('api/conference/<int:booking_id>/cancel/', conference_views.cancel_conference_booking, name='cancel_conference_booking'),
+path('api/conference/my-booking/<int:booking_id>/delete/', conference_views.delete_my_conference_booking, name='delete_my_conference_booking'),
+path('api/conference/all-bookings/', conference_views.all_conference_bookings, name='all_conference_bookings'),
+path('api/conference/<int:booking_id>/complete/', conference_views.complete_conference_booking, name='complete_conference_booking'),
+path('api/conference/booking/<int:booking_id>/delete/', conference_views.delete_conference_booking, name='delete_conference_booking'),
+
+
 ]
+

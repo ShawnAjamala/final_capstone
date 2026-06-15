@@ -5,16 +5,13 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .models import MpesaTransaction, Booking
+from .models import MpesaTransaction, Booking, TableBooking, ConferenceBooking
 from .mpesa import initiate_stk_push
 
 logger = logging.getLogger(__name__)
 
 
 ### ==================== INITIATE M-PESA PAYMENT ====================
-# Sends STK Push to customer's phone.
-# Accepts optional booking_id — auto-formats reference as "BK-{id}".
-# This links the payment to the booking for auto-confirmation in the callback.
 @csrf_exempt
 @require_POST
 def initiate_payment(request):
@@ -29,9 +26,9 @@ def initiate_payment(request):
         if not phone_number or not amount:
             return JsonResponse({"error": "phone_number and amount are required."}, status=400)
 
-        # If booking_id is provided, format reference as BK-{id}
+        # If booking_id is provided, keep it as-is (BK-5, TBL-1, CONF-1, VEN-1)
         if booking_id:
-            reference = f"BK-{booking_id}"
+            reference = str(booking_id)
 
         daraja_response = initiate_stk_push(
             phone_number=phone_number,
@@ -67,10 +64,7 @@ def initiate_payment(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-### ==================== M-PESA CALLBACK (PAYMENT RESULT) ====================
-# Called by Safaricom with the actual payment result.
-# On success: marks transaction Completed + auto-confirms the linked booking.
-# Reference "BK-{id}" is used to find the booking.
+### ==================== M-PESA CALLBACK ====================
 @csrf_exempt
 @require_POST
 def mpesa_callback(request):
@@ -88,7 +82,6 @@ def mpesa_callback(request):
             return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
 
         if result_code == 0:
-            # Payment successful
             items = stk.get("CallbackMetadata", {}).get("Item", [])
             meta  = {item["Name"]: item.get("Value") for item in items}
             transaction.status        = "Completed"
@@ -96,7 +89,6 @@ def mpesa_callback(request):
             transaction.result_desc   = result_desc
             transaction.save()
 
-            # Auto-confirm the booking linked to this payment
             _confirm_booking(transaction)
 
         elif result_code == 1032:
@@ -131,20 +123,44 @@ def payment_status(request, checkout_request_id):
         return JsonResponse({"error": "Transaction not found."}, status=404)
 
 
-### ==================== HELPER: CONFIRM BOOKING AFTER PAYMENT ====================
-# Extracts booking ID from transaction reference (format: "BK-123")
-# Updates booking to confirmed + paid.
+### ==================== HELPER: CONFIRM ANY BOOKING TYPE ====================
 def _confirm_booking(transaction):
+    """
+    Auto-confirms the booking linked to this payment.
+    Supports: BK-{id}, TBL-{id}, CONF-{id}, VEN-{id}
+    """
     reference = transaction.reference
 
-    if reference and reference.startswith("BK-"):
-        try:
+    if not reference:
+        return
+
+    try:
+        if reference.startswith("BK-"):
             booking_id = reference.replace("BK-", "").strip()
             booking = Booking.objects.get(id=booking_id)
             booking.status = 'confirmed'
             booking.payment_status = 'paid'
             booking.mpesa_transaction = transaction
             booking.save()
-            logger.info(f"Booking #{booking.id} confirmed via M-Pesa payment")
-        except (ValueError, Booking.DoesNotExist):
-            logger.warning(f"No booking found for reference: {reference}")
+            logger.info(f"Room Booking #{booking.id} confirmed")
+
+        elif reference.startswith("TBL-"):
+            booking_id = reference.replace("TBL-", "").strip()
+            booking = TableBooking.objects.get(id=booking_id)
+            booking.status = 'confirmed'
+            booking.payment_status = 'paid'
+            booking.mpesa_transaction = transaction
+            booking.save()
+            logger.info(f"Table Booking #{booking.id} confirmed")
+
+        elif reference.startswith("CONF-"):
+            booking_id = reference.replace("CONF-", "").strip()
+            booking = ConferenceBooking.objects.get(id=booking_id)
+            booking.status = 'confirmed'
+            booking.payment_status = 'paid'
+            booking.mpesa_transaction = transaction
+            booking.save()
+            logger.info(f"Conference Booking #{booking.id} confirmed")
+
+    except (ValueError, Booking.DoesNotExist, TableBooking.DoesNotExist, ConferenceBooking.DoesNotExist):
+        logger.warning(f"No booking found for reference: {reference}")
