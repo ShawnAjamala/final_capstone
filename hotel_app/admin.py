@@ -45,3 +45,12 @@ class ConferenceRoomAdmin(admin.ModelAdmin):
 class ConferenceBookingAdmin(admin.ModelAdmin):
     list_display = ['id', 'guest', 'conference_room', 'booking_date', 'start_time', 'end_time', 'status']
     list_filter = ['status', 'payment_status']
+
+from .models import Venue, VenueBooking
+@admin.register(Venue)
+class VenueAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'venue_type', 'capacity', 'price_per_day', 'is_active']
+
+@admin.register(VenueBooking)
+class VenueBookingAdmin(admin.ModelAdmin):
+    list_display = ['id', 'guest', 'venue', 'event_type', 'event_date', 'status']

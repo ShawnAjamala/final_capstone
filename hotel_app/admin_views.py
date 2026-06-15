@@ -83,3 +83,4 @@ class RejectStaffView(APIView):
             return Response({'message': f'Staff {username} rejected and removed'})
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        

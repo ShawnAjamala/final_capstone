@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .models import MpesaTransaction, Booking, TableBooking, ConferenceBooking
+from .models import MpesaTransaction, Booking, TableBooking, ConferenceBooking, VenueBooking
 from .mpesa import initiate_stk_push
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,6 @@ def initiate_payment(request):
         if not phone_number or not amount:
             return JsonResponse({"error": "phone_number and amount are required."}, status=400)
 
-        # If booking_id is provided, keep it as-is (BK-5, TBL-1, CONF-1, VEN-1)
         if booking_id:
             reference = str(booking_id)
 
@@ -162,5 +161,14 @@ def _confirm_booking(transaction):
             booking.save()
             logger.info(f"Conference Booking #{booking.id} confirmed")
 
-    except (ValueError, Booking.DoesNotExist, TableBooking.DoesNotExist, ConferenceBooking.DoesNotExist):
+        elif reference.startswith("VEN-"):
+            booking_id = reference.replace("VEN-", "").strip()
+            booking = VenueBooking.objects.get(id=booking_id)
+            booking.status = 'confirmed'
+            booking.payment_status = 'paid'
+            booking.mpesa_transaction = transaction
+            booking.save()
+            logger.info(f"Venue Booking #{booking.id} confirmed")
+
+    except (ValueError, Booking.DoesNotExist, TableBooking.DoesNotExist, ConferenceBooking.DoesNotExist, VenueBooking.DoesNotExist):
         logger.warning(f"No booking found for reference: {reference}")

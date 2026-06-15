@@ -4,6 +4,7 @@ from django.shortcuts import render
 from hotel_app import room_views
 from hotel_app import table_views
 from hotel_app import conference_views
+from hotel_app import venue_views
 from hotel_app.auth_views import (
     RegisterView, LoginView, LogoutView, CurrentUserView,
     GuestDashboardView, StaffDashboardView
@@ -118,6 +119,19 @@ path('api/conference/all-bookings/', conference_views.all_conference_bookings, n
 path('api/conference/<int:booking_id>/complete/', conference_views.complete_conference_booking, name='complete_conference_booking'),
 path('api/conference/booking/<int:booking_id>/delete/', conference_views.delete_conference_booking, name='delete_conference_booking'),
 
+### ==================== VENUES ====================
+path('api/venues/', venue_views.venue_list, name='venue_list'),
+path('api/venues/available/', venue_views.venue_available, name='venue_available'),
+path('api/venues/create/', venue_views.venue_create, name='venue_create'),
+path('api/venues/<int:venue_id>/update/', venue_views.venue_update, name='venue_update'),
+path('api/venues/<int:venue_id>/delete/', venue_views.venue_delete, name='venue_delete'),
+path('api/venues/book/', venue_views.venue_book, name='venue_book'),
+path('api/venues/my-bookings/', venue_views.my_venue_bookings, name='my_venue_bookings'),
+path('api/venues/<int:booking_id>/cancel/', venue_views.cancel_venue_booking, name='cancel_venue_booking'),
+path('api/venues/my-booking/<int:booking_id>/delete/', venue_views.delete_my_venue_booking, name='delete_my_venue_booking'),
+path('api/venues/all-bookings/', venue_views.all_venue_bookings, name='all_venue_bookings'),
+path('api/venues/<int:booking_id>/complete/', venue_views.complete_venue_booking, name='complete_venue_booking'),
+path('api/venues/booking/<int:booking_id>/delete/', venue_views.delete_venue_booking, name='delete_venue_booking'),
 
 ]
 
