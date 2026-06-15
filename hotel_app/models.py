@@ -267,3 +267,69 @@ class ConferenceBooking(models.Model):
 
     def __str__(self):
         return f"Conference #{self.id} - {self.guest.username} - {self.conference_room.name}"
+    
+    ### ==================== VENUE MODEL ====================
+# Venues for events: weddings, birthdays, other.
+# Packages are separated by event type using "|" delimiter.
+# Example: "Wedding Decor: 1, Cake: 1 | Birthday Decor: 1, Cake: 1 | Other Decor: 1"
+
+class Venue(models.Model):
+    VENUE_TYPES = [
+        ('wedding', 'Wedding'),
+        ('birthday', 'Birthday'),
+        ('other', 'Other'),
+    ]
+
+    name = models.CharField(max_length=100, unique=True)
+    venue_type = models.CharField(max_length=20, choices=VENUE_TYPES)
+    capacity = models.IntegerField()
+    price_per_day = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField(blank=True)
+    additional_packages = models.TextField(blank=True, help_text="Wedding Decor: 1, Cake: 1 | Birthday Decor: 1, Cake: 1 | Other Decor: 1")
+    is_active = models.BooleanField(default=True)
+    image = models.ImageField(upload_to='venues/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} - {self.venue_type}"
+
+
+### ==================== VENUE BOOKING MODEL ====================
+# Books a venue for a full day. Guest selects event type and packages.
+# Only one booking per venue per day.
+
+class VenueBooking(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('confirmed', 'Confirmed'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    PAYMENT_STATUS = [
+        ('unpaid', 'Unpaid'),
+        ('paid', 'Paid'),
+    ]
+
+    guest = models.ForeignKey(User, on_delete=models.CASCADE, related_name='venue_bookings')
+    venue = models.ForeignKey(Venue, on_delete=models.CASCADE, related_name='bookings')
+    event_type = models.CharField(max_length=20, choices=[('wedding', 'Wedding'), ('birthday', 'Birthday'), ('other', 'Other')])
+    event_date = models.DateField()
+    guests = models.IntegerField(default=1)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    selected_packages = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='unpaid')
+    mpesa_transaction = models.ForeignKey(MpesaTransaction, on_delete=models.SET_NULL, null=True, blank=True)
+    special_requests = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Venue #{self.id} - {self.guest.username} - {self.venue.name}"
