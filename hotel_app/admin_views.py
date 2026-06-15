@@ -84,3 +84,66 @@ class RejectStaffView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
         
+### ==================== ADMIN: LIST GUESTS ONLY ====================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def list_guests(request):
+    guests = UserProfile.objects.filter(role='guest').select_related('user')
+    data = []
+    for p in guests:
+        data.append({
+            'id': p.user.id,
+            'username': p.user.username,
+            'email': p.user.email,
+            'role': p.role,
+            'date_joined': p.user.date_joined,
+        })
+    return Response({'guests': data, 'total': len(data)})
+
+
+### ==================== ADMIN: LIST STAFF ONLY ====================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def list_staff(request):
+    staff = UserProfile.objects.filter(role='staff').select_related('user')
+    data = []
+    for p in staff:
+        data.append({
+            'id': p.user.id,
+            'username': p.user.username,
+            'email': p.user.email,
+            'role': p.role,
+            'is_approved': p.is_approved,
+            'date_joined': p.user.date_joined,
+        })
+    return Response({'staff': data, 'total': len(data)})
+
+
+### ==================== ADMIN: LIST ADMINS ONLY ====================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def list_admins(request):
+    admins = UserProfile.objects.filter(role='admin').select_related('user')
+    data = []
+    for p in admins:
+        data.append({
+            'id': p.user.id,
+            'username': p.user.username,
+            'email': p.user.email,
+            'role': p.role,
+            'date_joined': p.user.date_joined,
+        })
+    return Response({'admins': data, 'total': len(data)})
+
+
+### ==================== ADMIN: DELETE USER COMPLETELY ====================
+@api_view(['DELETE', 'POST'])
+@permission_classes([IsAuthenticated, IsAdmin])
+def delete_user(request, user_id):
+    try:
+        user = User.objects.get(id=user_id)
+        username = user.username
+        user.delete()  # Deletes User + UserProfile (cascade)
+        return Response({'message': f'User {username} deleted permanently'})
+    except User.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)

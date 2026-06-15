@@ -27,6 +27,9 @@ def venue_list(request):
 @permission_classes([IsAuthenticated])
 def venue_available(request):
     event_date = request.GET.get('date')
+    guests = request.GET.get('guests', 0)
+    event_type = request.GET.get('event_type', '')
+
     if not event_date:
         return Response({'error': 'date required'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -34,7 +37,15 @@ def venue_available(request):
         status='confirmed', event_date=event_date
     ).values_list('venue_id', flat=True)
 
-    available = Venue.objects.filter(is_active=True).exclude(id__in=booked_ids).values()
+    venues = Venue.objects.filter(is_active=True).exclude(id__in=booked_ids)
+
+    if guests and int(guests) > 0:
+        venues = venues.filter(capacity__gte=int(guests))
+
+    if event_type:
+        venues = venues.filter(venue_type=event_type)
+
+    available = venues.values()
     return Response({'date': event_date, 'available_venues': list(available)})
 
 
@@ -126,15 +137,12 @@ def venue_book(request):
 
     base_price = venue.price_per_day
 
-    # Parse packages for this event type
-    # Format: "Wedding Decor: 1, Cake: 1 | Birthday Decor: 1, Cake: 1 | Other Decor: 1"
     package_prices = {}
     if venue.additional_packages:
         sections = venue.additional_packages.split('|')
         for section in sections:
             section = section.strip()
             if section.lower().startswith(event_type.lower()):
-                # Extract packages after the event type prefix
                 parts = section.split(' ', 1)
                 if len(parts) > 1:
                     for pkg in parts[1].split(','):

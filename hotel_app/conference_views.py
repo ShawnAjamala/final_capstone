@@ -29,6 +29,7 @@ def conference_available(request):
     booking_date = request.GET.get('date')
     start_time = request.GET.get('start_time')
     end_time = request.GET.get('end_time')
+    guests = request.GET.get('guests', 0)
 
     if not all([booking_date, start_time, end_time]):
         return Response({'error': 'date, start_time, end_time required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -38,7 +39,12 @@ def conference_available(request):
         start_time__lt=end_time, end_time__gt=start_time
     ).values_list('conference_room_id', flat=True)
 
-    available = ConferenceRoom.objects.filter(is_active=True).exclude(id__in=booked_ids).values()
+    rooms = ConferenceRoom.objects.filter(is_active=True).exclude(id__in=booked_ids)
+
+    if guests and int(guests) > 0:
+        rooms = rooms.filter(capacity__gte=int(guests))
+
+    available = rooms.values()
     return Response({'date': booking_date, 'start_time': start_time, 'end_time': end_time, 'available_rooms': list(available)})
 
 
@@ -136,7 +142,6 @@ def conference_book(request):
 
     base_price = Decimal(str(hours)) * room.price_per_hour
 
-    # Parse additional packages: "Catering: 1, Tech Support: 1"
     package_prices = {}
     if room.additional_packages:
         for pkg in room.additional_packages.split(','):
