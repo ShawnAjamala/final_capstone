@@ -34,6 +34,61 @@ class UserListView(APIView):
         return Response({'users': data, 'total': len(data)})
 
 
+### ==================== LIST GUESTS ONLY ====================
+class ListGuestsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        guests = UserProfile.objects.filter(role='guest').select_related('user')
+        data = []
+        for p in guests:
+            data.append({
+                'id': p.user.id,
+                'username': p.user.username,
+                'email': p.user.email,
+                'role': p.role,
+                'date_joined': p.user.date_joined,
+            })
+        return Response({'guests': data, 'total': len(data)})
+
+
+### ==================== LIST STAFF ONLY ====================
+class ListStaffView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        staff = UserProfile.objects.filter(role='staff').select_related('user')
+        data = []
+        for p in staff:
+            data.append({
+                'id': p.user.id,
+                'username': p.user.username,
+                'email': p.user.email,
+                'role': p.role,
+                'is_approved': p.is_approved,
+                'date_joined': p.user.date_joined,
+            })
+        return Response({'staff': data, 'total': len(data)})
+
+
+### ==================== LIST ADMINS ONLY ====================
+class ListAdminsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        admins = UserProfile.objects.filter(role='admin').select_related('user')
+        data = []
+        for p in admins:
+            data.append({
+                'id': p.user.id,
+                'username': p.user.username,
+                'email': p.user.email,
+                'role': p.role,
+                'date_joined': p.user.date_joined,
+            })
+        return Response({'admins': data, 'total': len(data)})
+
+
 ### ==================== PENDING STAFF APPROVALS ====================
 class PendingStaffView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]
@@ -83,67 +138,20 @@ class RejectStaffView(APIView):
             return Response({'message': f'Staff {username} rejected and removed'})
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-### ==================== ADMIN: LIST GUESTS ONLY ====================
-@api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdmin])
-def list_guests(request):
-    guests = UserProfile.objects.filter(role='guest').select_related('user')
-    data = []
-    for p in guests:
-        data.append({
-            'id': p.user.id,
-            'username': p.user.username,
-            'email': p.user.email,
-            'role': p.role,
-            'date_joined': p.user.date_joined,
-        })
-    return Response({'guests': data, 'total': len(data)})
 
 
-### ==================== ADMIN: LIST STAFF ONLY ====================
-@api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdmin])
-def list_staff(request):
-    staff = UserProfile.objects.filter(role='staff').select_related('user')
-    data = []
-    for p in staff:
-        data.append({
-            'id': p.user.id,
-            'username': p.user.username,
-            'email': p.user.email,
-            'role': p.role,
-            'is_approved': p.is_approved,
-            'date_joined': p.user.date_joined,
-        })
-    return Response({'staff': data, 'total': len(data)})
+### ==================== DELETE USER PERMANENTLY ====================
+class DeleteUserView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
 
+    def delete(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            username = user.username
+            user.delete()
+            return Response({'message': f'User {username} deleted permanently'})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-### ==================== ADMIN: LIST ADMINS ONLY ====================
-@api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdmin])
-def list_admins(request):
-    admins = UserProfile.objects.filter(role='admin').select_related('user')
-    data = []
-    for p in admins:
-        data.append({
-            'id': p.user.id,
-            'username': p.user.username,
-            'email': p.user.email,
-            'role': p.role,
-            'date_joined': p.user.date_joined,
-        })
-    return Response({'admins': data, 'total': len(data)})
-
-
-### ==================== ADMIN: DELETE USER COMPLETELY ====================
-@api_view(['DELETE', 'POST'])
-@permission_classes([IsAuthenticated, IsAdmin])
-def delete_user(request, user_id):
-    try:
-        user = User.objects.get(id=user_id)
-        username = user.username
-        user.delete()  # Deletes User + UserProfile (cascade)
-        return Response({'message': f'User {username} deleted permanently'})
-    except User.DoesNotExist:
-        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+    def post(self, request, user_id):
+        return self.delete(request, user_id)

@@ -1,18 +1,17 @@
 from django.urls import path, include
 from django.http import JsonResponse
 from django.shortcuts import render
-from hotel_app import room_views
-from hotel_app import table_views
-from hotel_app import conference_views
-from hotel_app import venue_views
+from hotel_app import room_views, table_views, conference_views, venue_views
 from hotel_app.auth_views import (
     RegisterView, LoginView, LogoutView, CurrentUserView,
     GuestDashboardView, StaffDashboardView
 )
 from hotel_app.admin_views import (
     AdminDashboardView, UserListView, PendingStaffView,
-    ApproveStaffView, RejectStaffView
+    ApproveStaffView, RejectStaffView,
+    ListGuestsView, ListStaffView, ListAdminsView, DeleteUserView
 )
+from hotel_app import profile_views
 
 
 ### ==================== PUBLIC DASHBOARD ====================
@@ -40,7 +39,7 @@ urlpatterns = [
     ### ==================== MPESA TEST PAGE ====================
     path("mpesa-test/", mpesa_test_page, name="mpesa_test"),
 
-    ### ==================== MPESA API (DO NOT TOUCH) ====================
+    ### ==================== MPESA API ====================
     path("api/mpesa/", include("hotel_app.mpesa_urls")),
 
     ### ==================== AUTH ====================
@@ -56,41 +55,36 @@ urlpatterns = [
 
     ### ==================== ADMIN USER MANAGEMENT ====================
     path('api/admin/users/', UserListView.as_view(), name='admin_users'),
+    path('api/admin/guests/', ListGuestsView.as_view(), name='admin_guests'),
+    path('api/admin/staff/', ListStaffView.as_view(), name='admin_staff_list'),
+    path('api/admin/admins/', ListAdminsView.as_view(), name='admin_admins'),
     path('api/admin/staff/pending/', PendingStaffView.as_view(), name='admin_pending_staff'),
     path('api/admin/staff/approve/', ApproveStaffView.as_view(), name='admin_approve_staff'),
     path('api/admin/staff/reject/', RejectStaffView.as_view(), name='admin_reject_staff'),
+    path('api/admin/users/<int:user_id>/delete/', DeleteUserView.as_view(), name='admin_delete_user'),
 
-    ### ==================== ROOMS (MANAGEMENT + BOOKING) ====================
-    # Staff/Admin manage rooms
+    ### ==================== PROFILE ====================
+    path('api/profile/', profile_views.GetProfileView.as_view(), name='get_profile'),
+    path('api/profile/update-password/', profile_views.UpdatePasswordView.as_view(), name='update_password'),
+    path('api/profile/delete-account/', profile_views.DeleteAccountView.as_view(), name='delete_account'),
+
+    ### ==================== ROOMS ====================
     path('api/rooms/', room_views.room_list, name='room_list'),
     path('api/rooms/available/', room_views.room_available, name='room_available'),
     path('api/rooms/<int:room_id>/', room_views.room_detail, name='room_detail'),
     path('api/rooms/create/', room_views.room_create, name='room_create'),
     path('api/rooms/<int:room_id>/update/', room_views.room_update, name='room_update'),
     path('api/rooms/<int:room_id>/delete/', room_views.room_delete, name='room_delete'),
-
-    # Guest books room
     path('api/rooms/book/', room_views.book_room, name='book_room'),
-
-    # Guest views their bookings
     path('api/rooms/my-bookings/', room_views.my_bookings, name='my_bookings'),
-
-    # Guest cancels booking
     path('api/rooms/<int:booking_id>/cancel/', room_views.cancel_booking, name='cancel_booking'),
-
-    # Staff views all bookings
     path('api/rooms/all-bookings/', room_views.all_bookings, name='all_bookings'),
-
-    # Staff check-in / check-out
     path('api/rooms/<int:booking_id>/check-in/', room_views.check_in, name='check_in'),
     path('api/rooms/<int:booking_id>/check-out/', room_views.check_out, name='check_out'),
-    # Room booking deletion
-path('api/rooms/booking/<int:booking_id>/delete/', room_views.delete_booking, name='delete_booking'),
-path('api/rooms/my-booking/<int:booking_id>/delete/', room_views.delete_my_booking, name='delete_my_booking'),
+    path('api/rooms/booking/<int:booking_id>/delete/', room_views.delete_booking, name='delete_booking'),
+    path('api/rooms/my-booking/<int:booking_id>/delete/', room_views.delete_my_booking, name='delete_my_booking'),
 
-
-
- ### ==================== RESTAURANT TABLES ====================
+    ### ==================== RESTAURANT TABLES ====================
     path('api/tables/', table_views.table_list, name='table_list'),
     path('api/tables/available/', table_views.table_available, name='table_available'),
     path('api/tables/create/', table_views.table_create, name='table_create'),
@@ -101,37 +95,34 @@ path('api/rooms/my-booking/<int:booking_id>/delete/', room_views.delete_my_booki
     path('api/tables/<int:booking_id>/cancel/', table_views.cancel_table_booking, name='cancel_table_booking'),
     path('api/tables/all-bookings/', table_views.all_table_bookings, name='all_table_bookings'),
     path('api/tables/<int:booking_id>/complete/', table_views.complete_table_booking, name='complete_table_booking'),
-# Table booking deletion
-path('api/tables/booking/<int:booking_id>/delete/', table_views.delete_table_booking, name='delete_table_booking'),
-path('api/tables/my-booking/<int:booking_id>/delete/', table_views.delete_my_table_booking, name='delete_my_table_booking'),
+    path('api/tables/booking/<int:booking_id>/delete/', table_views.delete_table_booking, name='delete_table_booking'),
+    path('api/tables/my-booking/<int:booking_id>/delete/', table_views.delete_my_table_booking, name='delete_my_table_booking'),
 
-### ==================== CONFERENCE ROOMS ====================
-path('api/conference/', conference_views.conference_list, name='conference_list'),
-path('api/conference/available/', conference_views.conference_available, name='conference_available'),
-path('api/conference/create/', conference_views.conference_create, name='conference_create'),
-path('api/conference/<int:room_id>/update/', conference_views.conference_update, name='conference_update'),
-path('api/conference/<int:room_id>/delete/', conference_views.conference_delete, name='conference_delete'),
-path('api/conference/book/', conference_views.conference_book, name='conference_book'),
-path('api/conference/my-bookings/', conference_views.my_conference_bookings, name='my_conference_bookings'),
-path('api/conference/<int:booking_id>/cancel/', conference_views.cancel_conference_booking, name='cancel_conference_booking'),
-path('api/conference/my-booking/<int:booking_id>/delete/', conference_views.delete_my_conference_booking, name='delete_my_conference_booking'),
-path('api/conference/all-bookings/', conference_views.all_conference_bookings, name='all_conference_bookings'),
-path('api/conference/<int:booking_id>/complete/', conference_views.complete_conference_booking, name='complete_conference_booking'),
-path('api/conference/booking/<int:booking_id>/delete/', conference_views.delete_conference_booking, name='delete_conference_booking'),
+    ### ==================== CONFERENCE ROOMS ====================
+    path('api/conference/', conference_views.conference_list, name='conference_list'),
+    path('api/conference/available/', conference_views.conference_available, name='conference_available'),
+    path('api/conference/create/', conference_views.conference_create, name='conference_create'),
+    path('api/conference/<int:room_id>/update/', conference_views.conference_update, name='conference_update'),
+    path('api/conference/<int:room_id>/delete/', conference_views.conference_delete, name='conference_delete'),
+    path('api/conference/book/', conference_views.conference_book, name='conference_book'),
+    path('api/conference/my-bookings/', conference_views.my_conference_bookings, name='my_conference_bookings'),
+    path('api/conference/<int:booking_id>/cancel/', conference_views.cancel_conference_booking, name='cancel_conference_booking'),
+    path('api/conference/my-booking/<int:booking_id>/delete/', conference_views.delete_my_conference_booking, name='delete_my_conference_booking'),
+    path('api/conference/all-bookings/', conference_views.all_conference_bookings, name='all_conference_bookings'),
+    path('api/conference/<int:booking_id>/complete/', conference_views.complete_conference_booking, name='complete_conference_booking'),
+    path('api/conference/booking/<int:booking_id>/delete/', conference_views.delete_conference_booking, name='delete_conference_booking'),
 
-### ==================== VENUES ====================
-path('api/venues/', venue_views.venue_list, name='venue_list'),
-path('api/venues/available/', venue_views.venue_available, name='venue_available'),
-path('api/venues/create/', venue_views.venue_create, name='venue_create'),
-path('api/venues/<int:venue_id>/update/', venue_views.venue_update, name='venue_update'),
-path('api/venues/<int:venue_id>/delete/', venue_views.venue_delete, name='venue_delete'),
-path('api/venues/book/', venue_views.venue_book, name='venue_book'),
-path('api/venues/my-bookings/', venue_views.my_venue_bookings, name='my_venue_bookings'),
-path('api/venues/<int:booking_id>/cancel/', venue_views.cancel_venue_booking, name='cancel_venue_booking'),
-path('api/venues/my-booking/<int:booking_id>/delete/', venue_views.delete_my_venue_booking, name='delete_my_venue_booking'),
-path('api/venues/all-bookings/', venue_views.all_venue_bookings, name='all_venue_bookings'),
-path('api/venues/<int:booking_id>/complete/', venue_views.complete_venue_booking, name='complete_venue_booking'),
-path('api/venues/booking/<int:booking_id>/delete/', venue_views.delete_venue_booking, name='delete_venue_booking'),
-
+    ### ==================== VENUES ====================
+    path('api/venues/', venue_views.venue_list, name='venue_list'),
+    path('api/venues/available/', venue_views.venue_available, name='venue_available'),
+    path('api/venues/create/', venue_views.venue_create, name='venue_create'),
+    path('api/venues/<int:venue_id>/update/', venue_views.venue_update, name='venue_update'),
+    path('api/venues/<int:venue_id>/delete/', venue_views.venue_delete, name='venue_delete'),
+    path('api/venues/book/', venue_views.venue_book, name='venue_book'),
+    path('api/venues/my-bookings/', venue_views.my_venue_bookings, name='my_venue_bookings'),
+    path('api/venues/<int:booking_id>/cancel/', venue_views.cancel_venue_booking, name='cancel_venue_booking'),
+    path('api/venues/my-booking/<int:booking_id>/delete/', venue_views.delete_my_venue_booking, name='delete_my_venue_booking'),
+    path('api/venues/all-bookings/', venue_views.all_venue_bookings, name='all_venue_bookings'),
+    path('api/venues/<int:booking_id>/complete/', venue_views.complete_venue_booking, name='complete_venue_booking'),
+    path('api/venues/booking/<int:booking_id>/delete/', venue_views.delete_venue_booking, name='delete_venue_booking'),
 ]
-
