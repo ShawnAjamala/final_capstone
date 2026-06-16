@@ -14,6 +14,11 @@ class RegisterSerializer(serializers.Serializer):
         default='guest', label='Account Role'
     )
 
+    def validate_email(self, value):
+        if not value.lower().endswith('@gmail.com'):
+            raise serializers.ValidationError("Only Gmail addresses are allowed (@gmail.com)")
+        return value
+
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(label='Username')
