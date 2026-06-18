@@ -14,12 +14,29 @@ def get_request_data(request):
     return request.POST
 
 
+def venue_to_dict(venue):
+    return {
+        'id': venue.id,
+        'name': venue.name,
+        'venue_type': venue.venue_type,
+        'capacity': venue.capacity,
+        'price_per_day': str(venue.price_per_day),
+        'description': venue.description,
+        'additional_packages': venue.additional_packages,
+        'is_active': venue.is_active,
+        'image': venue.image.url if venue.image else None,
+        'created_at': venue.created_at,
+        'updated_at': venue.updated_at,
+    }
+
+
 ### ==================== LIST ALL VENUES ====================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def venue_list(request):
-    venues = Venue.objects.filter(is_active=True).values()
-    return Response(venues)
+    venues = Venue.objects.filter(is_active=True)
+    data = [venue_to_dict(v) for v in venues]
+    return Response(data)
 
 
 ### ==================== CHECK AVAILABILITY ====================
@@ -38,15 +55,13 @@ def venue_available(request):
     ).values_list('venue_id', flat=True)
 
     venues = Venue.objects.filter(is_active=True).exclude(id__in=booked_ids)
-
     if guests and int(guests) > 0:
         venues = venues.filter(capacity__gte=int(guests))
-
     if event_type:
         venues = venues.filter(venue_type=event_type)
 
-    available = venues.values()
-    return Response({'date': event_date, 'available_venues': list(available)})
+    data = [venue_to_dict(v) for v in venues]
+    return Response({'date': event_date, 'available_venues': data})
 
 
 ### ==================== STAFF/ADMIN: ADD VENUE ====================

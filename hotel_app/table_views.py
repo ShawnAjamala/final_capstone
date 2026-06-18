@@ -14,12 +14,27 @@ def get_request_data(request):
     return request.POST
 
 
+def table_to_dict(table):
+    return {
+        'id': table.id,
+        'table_number': table.table_number,
+        'capacity': table.capacity,
+        'price_per_slot': str(table.price_per_slot),
+        'location': table.location,
+        'is_active': table.is_active,
+        'image': table.image.url if table.image else None,
+        'created_at': table.created_at,
+        'updated_at': table.updated_at,
+    }
+
+
 ### ==================== LIST ALL ACTIVE TABLES ====================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def table_list(request):
-    tables = RestaurantTable.objects.filter(is_active=True).values()
-    return Response(tables)
+    tables = RestaurantTable.objects.filter(is_active=True)
+    data = [table_to_dict(t) for t in tables]
+    return Response(data)
 
 
 ### ==================== CHECK AVAILABLE TABLES BY DATE & TIME ====================
@@ -37,7 +52,6 @@ def table_available(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Find tables already booked during this time slot
     booked_table_ids = TableBooking.objects.filter(
         status='confirmed',
         reservation_date=reservation_date,
@@ -48,14 +62,16 @@ def table_available(request):
     available = RestaurantTable.objects.filter(
         is_active=True,
         capacity__gte=guests
-    ).exclude(id__in=booked_table_ids).values()
+    ).exclude(id__in=booked_table_ids)
+
+    data = [table_to_dict(t) for t in available]
 
     return Response({
         'date': reservation_date,
         'start_time': start_time,
         'end_time': end_time,
         'guests': guests,
-        'available_tables': list(available)
+        'available_tables': data
     })
 
 
@@ -155,7 +171,6 @@ def reserve_table(request):
     if guests > table.capacity:
         return Response({'error': f'Table capacity is {table.capacity}'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Check for overlapping confirmed bookings
     conflicting = TableBooking.objects.filter(
         table=table,
         status='confirmed',
@@ -266,6 +281,7 @@ def complete_table_booking(request, booking_id):
     booking.status = 'completed'
     booking.save()
     return Response({'message': f'Table {booking.table.table_number} is now available.'})
+
 
 ### ==================== STAFF/ADMIN: DELETE TABLE BOOKING ====================
 @api_view(['DELETE', 'POST'])

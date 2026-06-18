@@ -10,8 +10,6 @@ from .models import Room, Booking
 from .permissions import IsGuest, IsStaff, IsAdmin, IsAdminOrStaff
 
 
-
-
 ### ==================== HELPER ====================
 def get_request_data(request):
     if hasattr(request, 'data') and request.data:
@@ -19,12 +17,30 @@ def get_request_data(request):
     return request.POST
 
 
+def room_to_dict(room, request=None):
+    """Convert room to JSON-safe dict — handles CloudinaryField"""
+    return {
+        'id': room.id,
+        'room_number': room.room_number,
+        'room_type': room.room_type,
+        'price_per_night': str(room.price_per_night),
+        'max_guests': room.max_guests,
+        'description': room.description,
+        'amenities': room.amenities,
+        'is_active': room.is_active,
+        'image': room.image.url if room.image else None,
+        'created_at': room.created_at,
+        'updated_at': room.updated_at,
+    }
+
+
 ### ==================== LIST ALL ACTIVE ROOMS ====================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def room_list(request):
-    rooms = Room.objects.filter(is_active=True).values()
-    return Response(rooms)
+    rooms = Room.objects.filter(is_active=True)
+    data = [room_to_dict(r, request) for r in rooms]
+    return Response(data)
 
 
 ### ==================== CHECK AVAILABLE ROOMS BY DATE ====================
@@ -46,12 +62,13 @@ def room_available(request):
         check_out__gt=check_in
     ).values_list('room_id', flat=True)
 
-    available = Room.objects.filter(is_active=True).exclude(id__in=booked_room_ids).values()
+    available = Room.objects.filter(is_active=True).exclude(id__in=booked_room_ids)
+    data = [room_to_dict(r, request) for r in available]
 
     return Response({
         'check_in': check_in,
         'check_out': check_out,
-        'available_rooms': list(available)
+        'available_rooms': data
     })
 
 
@@ -61,18 +78,7 @@ def room_available(request):
 def room_detail(request, room_id):
     try:
         room = Room.objects.get(id=room_id)
-        data = {
-            'id': room.id,
-            'room_number': room.room_number,
-            'room_type': room.room_type,
-            'price_per_night': str(room.price_per_night),
-            'max_guests': room.max_guests,
-            'description': room.description,
-            'amenities': room.amenities,
-            'is_active': room.is_active,
-            'image': request.build_absolute_uri(room.image.url) if room.image else None,
-        }
-        return Response(data)
+        return Response(room_to_dict(room, request))
     except Room.DoesNotExist:
         return Response({'error': 'Room not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -154,8 +160,6 @@ def room_delete(request, room_id):
 
 
 ### ==================== GUEST: BOOK A ROOM ====================
-# Creates booking (pending/unpaid). Guest must pay via M-Pesa to confirm.
-# M-Pesa callback auto-updates status to confirmed/paid.
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsGuest])
 def book_room(request):
@@ -220,7 +224,7 @@ def book_room(request):
             'total_price': str(total_price),
             'status': booking.status,
             'payment_status': booking.payment_status,
-            'next_step': f'POST /api/mpesa/pay/ with booking_id: {booking.id}'
+            'next_step': f'POST /api/mpesa/pay/ with booking_id: BK-{booking.id}'
         }
     }, status=status.HTTP_201_CREATED)
 
@@ -330,8 +334,9 @@ def check_out(request, booking_id):
         'message': f'Guest checked out. Room {booking.room.room_number} is now available.',
         'booking_id': booking.id
     })
+
+
 ### ==================== STAFF/ADMIN: DELETE BOOKING ====================
-# Only for completed or cancelled bookings. Active bookings cannot be deleted.
 @api_view(['DELETE', 'POST'])
 @permission_classes([IsAuthenticated, IsAdminOrStaff])
 def delete_booking(request, booking_id):

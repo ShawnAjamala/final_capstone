@@ -14,12 +14,28 @@ def get_request_data(request):
     return request.POST
 
 
+def conference_to_dict(room):
+    return {
+        'id': room.id,
+        'name': room.name,
+        'capacity': room.capacity,
+        'price_per_hour': str(room.price_per_hour),
+        'features': room.features,
+        'additional_packages': room.additional_packages,
+        'is_active': room.is_active,
+        'image': room.image.url if room.image else None,
+        'created_at': room.created_at,
+        'updated_at': room.updated_at,
+    }
+
+
 ### ==================== LIST ALL CONFERENCE ROOMS ====================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def conference_list(request):
-    rooms = ConferenceRoom.objects.filter(is_active=True).values()
-    return Response(rooms)
+    rooms = ConferenceRoom.objects.filter(is_active=True)
+    data = [conference_to_dict(r) for r in rooms]
+    return Response(data)
 
 
 ### ==================== CHECK AVAILABILITY ====================
@@ -40,12 +56,11 @@ def conference_available(request):
     ).values_list('conference_room_id', flat=True)
 
     rooms = ConferenceRoom.objects.filter(is_active=True).exclude(id__in=booked_ids)
-
     if guests and int(guests) > 0:
         rooms = rooms.filter(capacity__gte=int(guests))
 
-    available = rooms.values()
-    return Response({'date': booking_date, 'start_time': start_time, 'end_time': end_time, 'available_rooms': list(available)})
+    data = [conference_to_dict(r) for r in rooms]
+    return Response({'date': booking_date, 'start_time': start_time, 'end_time': end_time, 'available_rooms': data})
 
 
 ### ==================== STAFF/ADMIN: ADD CONFERENCE ROOM ====================
