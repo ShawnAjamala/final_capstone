@@ -122,6 +122,24 @@ class ApproveStaffView(APIView):
         except UserProfile.DoesNotExist:
             return Response({'error': 'Staff user not found'}, status=status.HTTP_404_NOT_FOUND)
 
+### ==================== UNAPPROVE STAFF ====================
+class UnapproveStaffView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_id required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            profile = UserProfile.objects.get(user_id=user_id, role='staff')
+            profile.is_approved = False
+            profile.save()
+            return Response({'message': f'Staff {profile.user.username} unapproved'})
+        except UserProfile.DoesNotExist:
+            return Response({'error': 'Staff user not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+
 
 ### ==================== REJECT/DELETE STAFF ====================
 class RejectStaffView(APIView):

@@ -7,7 +7,7 @@ from hotel_app.auth_views import (
     GuestDashboardView, StaffDashboardView
 )
 from hotel_app.admin_views import (
-    AdminDashboardView, UserListView, PendingStaffView,
+    AdminDashboardView, UnapproveStaffView, UserListView, PendingStaffView,
     ApproveStaffView, RejectStaffView,
     ListGuestsView, ListStaffView, ListAdminsView, DeleteUserView
 )
@@ -60,6 +60,7 @@ urlpatterns = [
     path('api/admin/admins/', ListAdminsView.as_view(), name='admin_admins'),
     path('api/admin/staff/pending/', PendingStaffView.as_view(), name='admin_pending_staff'),
     path('api/admin/staff/approve/', ApproveStaffView.as_view(), name='admin_approve_staff'),
+    path('api/admin/staff/unapprove/', UnapproveStaffView.as_view(), name='admin_unapprove_staff'),
     path('api/admin/staff/reject/', RejectStaffView.as_view(), name='admin_reject_staff'),
     path('api/admin/users/<int:user_id>/delete/', DeleteUserView.as_view(), name='admin_delete_user'),
 
