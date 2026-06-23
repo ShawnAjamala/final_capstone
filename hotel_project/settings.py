@@ -21,6 +21,7 @@ ALLOWED_HOSTS = ['*']
 
 CSRF_TRUSTED_ORIGINS = [
     'https://balcony-tumble-smell.ngrok-free.dev',
+    'https://final-capstone-2puq.onrender.com', 
 ]
 
 # Application definition
