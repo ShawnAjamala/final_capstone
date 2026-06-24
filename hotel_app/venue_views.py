@@ -50,8 +50,9 @@ def venue_available(request):
     if not event_date:
         return Response({'error': 'date required'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # CHANGED: Hide both pending and confirmed bookings
     booked_ids = VenueBooking.objects.filter(
-        status='confirmed', event_date=event_date
+        status__in=['confirmed', 'pending'], event_date=event_date
     ).values_list('venue_id', flat=True)
 
     venues = Venue.objects.filter(is_active=True).exclude(id__in=booked_ids)
@@ -144,8 +145,9 @@ def venue_book(request):
     except Venue.DoesNotExist:
         return Response({'error': 'Venue not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    # CHANGED: Check for both pending and confirmed conflicts
     conflicting = VenueBooking.objects.filter(
-        venue=venue, status='confirmed', event_date=event_date
+        venue=venue, status__in=['confirmed', 'pending'], event_date=event_date
     )
     if conflicting.exists():
         return Response({'error': 'Venue not available for this date'}, status=status.HTTP_400_BAD_REQUEST)

@@ -52,8 +52,9 @@ def table_available(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # CHANGED: Hide both pending and confirmed bookings
     booked_table_ids = TableBooking.objects.filter(
-        status='confirmed',
+        status__in=['confirmed', 'pending'],
         reservation_date=reservation_date,
         start_time__lt=end_time,
         end_time__gt=start_time
@@ -171,9 +172,10 @@ def reserve_table(request):
     if guests > table.capacity:
         return Response({'error': f'Table capacity is {table.capacity}'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # CHANGED: Check for both pending and confirmed conflicts
     conflicting = TableBooking.objects.filter(
         table=table,
-        status='confirmed',
+        status__in=['confirmed', 'pending'],
         reservation_date=reservation_date,
         start_time__lt=end_time,
         end_time__gt=start_time

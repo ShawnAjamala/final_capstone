@@ -50,8 +50,9 @@ def conference_available(request):
     if not all([booking_date, start_time, end_time]):
         return Response({'error': 'date, start_time, end_time required'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # CHANGED: Hide both pending and confirmed bookings
     booked_ids = ConferenceBooking.objects.filter(
-        status='confirmed', booking_date=booking_date,
+        status__in=['confirmed', 'pending'], booking_date=booking_date,
         start_time__lt=end_time, end_time__gt=start_time
     ).values_list('conference_room_id', flat=True)
 
@@ -142,8 +143,9 @@ def conference_book(request):
     except ConferenceRoom.DoesNotExist:
         return Response({'error': 'Conference room not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    # CHANGED: Check for both pending and confirmed conflicts
     conflicting = ConferenceBooking.objects.filter(
-        conference_room=room, status='confirmed',
+        conference_room=room, status__in=['confirmed', 'pending'],
         booking_date=booking_date, start_time__lt=end_time, end_time__gt=start_time
     )
     if conflicting.exists():
