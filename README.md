@@ -305,4 +305,3 @@ Images are stored on Cloudinary CDN and survive server redeploys.
 
 Shawn Ajamala
 
-#
