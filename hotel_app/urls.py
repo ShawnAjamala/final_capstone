@@ -1,7 +1,7 @@
 from django.urls import path, include
 from django.http import JsonResponse
 from django.shortcuts import render
-from hotel_app import room_views, table_views, conference_views, venue_views
+from hotel_app import room_views, table_views, conference_views, venue_views, staff_views  # Add staff_views
 from hotel_app.auth_views import (
     RegisterView, LoginView, LogoutView, CurrentUserView,
     GuestDashboardView, StaffDashboardView
@@ -52,6 +52,9 @@ urlpatterns = [
     path('api/guest/dashboard/', GuestDashboardView.as_view(), name='guest_dashboard'),
     path('api/staff/dashboard/', StaffDashboardView.as_view(), name='staff_dashboard'),
     path('api/admin/dashboard/', AdminDashboardView.as_view(), name='admin_dashboard'),
+
+    ### ==================== STAFF ANALYTICS ====================
+    path('api/staff/analytics/', staff_views.staff_analytics, name='staff_analytics'),
 
     ### ==================== ADMIN USER MANAGEMENT ====================
     path('api/admin/users/', UserListView.as_view(), name='admin_users'),
