@@ -3,7 +3,7 @@ from decimal import Decimal
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import ConferenceRoom, ConferenceBooking
 from .permissions import IsGuest, IsAdminOrStaff
 
@@ -29,18 +29,18 @@ def conference_to_dict(room):
     }
 
 
-### ==================== LIST ALL CONFERENCE ROOMS ====================
+### ==================== LIST ALL CONFERENCE ROOMS (PUBLIC) ====================
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def conference_list(request):
     rooms = ConferenceRoom.objects.filter(is_active=True)
     data = [conference_to_dict(r) for r in rooms]
     return Response(data)
 
 
-### ==================== CHECK AVAILABILITY ====================
+### ==================== CHECK AVAILABILITY (PUBLIC) ====================
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def conference_available(request):
     booking_date = request.GET.get('date')
     start_time = request.GET.get('start_time')
@@ -50,7 +50,6 @@ def conference_available(request):
     if not all([booking_date, start_time, end_time]):
         return Response({'error': 'date, start_time, end_time required'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # CHANGED: Hide both pending and confirmed bookings
     booked_ids = ConferenceBooking.objects.filter(
         status__in=['confirmed', 'pending'], booking_date=booking_date,
         start_time__lt=end_time, end_time__gt=start_time
@@ -79,12 +78,7 @@ def conference_create(request):
     if ConferenceRoom.objects.filter(name=name).exists():
         return Response({'error': 'Conference room name already exists'}, status=status.HTTP_400_BAD_REQUEST)
 
-    room = ConferenceRoom.objects.create(
-        name=name, capacity=capacity, price_per_hour=price_per_hour,
-        features=data.get('features', ''),
-        additional_packages=data.get('additional_packages', ''),
-        image=request.FILES.get('image') if hasattr(request, 'FILES') else None,
-    )
+    room = ConferenceRoom.objects.create(name=name, capacity=capacity, price_per_hour=price_per_hour, features=data.get('features', ''), additional_packages=data.get('additional_packages', ''), image=request.FILES.get('image') if hasattr(request, 'FILES') else None)
     return Response({'message': 'Conference room created', 'room_id': room.id, 'name': room.name}, status=status.HTTP_201_CREATED)
 
 
@@ -96,7 +90,6 @@ def conference_update(request, room_id):
         room = ConferenceRoom.objects.get(id=room_id)
     except ConferenceRoom.DoesNotExist:
         return Response({'error': 'Conference room not found'}, status=status.HTTP_404_NOT_FOUND)
-
     data = get_request_data(request)
     room.name = data.get('name', room.name)
     room.capacity = data.get('capacity', room.capacity)
@@ -123,7 +116,7 @@ def conference_delete(request, room_id):
         return Response({'error': 'Conference room not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
-### ==================== GUEST: BOOK CONFERENCE ROOM ====================
+### ==================== GUEST: BOOK CONFERENCE ROOM (AUTH REQUIRED) ====================
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsGuest])
 def conference_book(request):
@@ -143,11 +136,7 @@ def conference_book(request):
     except ConferenceRoom.DoesNotExist:
         return Response({'error': 'Conference room not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    # CHANGED: Check for both pending and confirmed conflicts
-    conflicting = ConferenceBooking.objects.filter(
-        conference_room=room, status__in=['confirmed', 'pending'],
-        booking_date=booking_date, start_time__lt=end_time, end_time__gt=start_time
-    )
+    conflicting = ConferenceBooking.objects.filter(conference_room=room, status__in=['confirmed', 'pending'], booking_date=booking_date, start_time__lt=end_time, end_time__gt=start_time)
     if conflicting.exists():
         return Response({'error': 'Room not available for this time slot'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -158,43 +147,19 @@ def conference_book(request):
         return Response({'error': 'end_time must be after start_time'}, status=status.HTTP_400_BAD_REQUEST)
 
     base_price = Decimal(str(hours)) * room.price_per_hour
-
     package_prices = {}
     if room.additional_packages:
         for pkg in room.additional_packages.split(','):
             pkg = pkg.strip()
-            if ':' in pkg:
-                name, price = pkg.split(':')
-                package_prices[name.strip()] = Decimal(price.strip())
-
+            if ':' in pkg: name, price = pkg.split(':'); package_prices[name.strip()] = Decimal(price.strip())
     extra_charges = Decimal('0')
     for selected in selected_packages:
-        if selected in package_prices:
-            extra_charges += package_prices[selected]
-
+        if selected in package_prices: extra_charges += package_prices[selected]
     total_price = base_price + extra_charges
 
-    booking = ConferenceBooking.objects.create(
-        guest=request.user, conference_room=room,
-        booking_date=booking_date, start_time=start_time, end_time=end_time,
-        guests=guests, total_price=total_price,
-        selected_packages=str(selected_packages),
-        status='pending', payment_status='unpaid'
-    )
+    booking = ConferenceBooking.objects.create(guest=request.user, conference_room=room, booking_date=booking_date, start_time=start_time, end_time=end_time, guests=guests, total_price=total_price, selected_packages=str(selected_packages), status='pending', payment_status='unpaid')
 
-    return Response({
-        'message': 'Conference room booked. Pay via M-Pesa to confirm.',
-        'booking': {
-            'id': booking.id, 'room': room.name,
-            'date': booking_date, 'time': f'{start_time} - {end_time}',
-            'hours': hours, 'base_price': str(base_price),
-            'selected_packages': selected_packages,
-            'extra_charges': str(extra_charges),
-            'total_price': str(total_price),
-            'status': booking.status,
-            'next_step': f'POST /api/mpesa/pay/ with booking_id: CONF-{booking.id}'
-        }
-    }, status=status.HTTP_201_CREATED)
+    return Response({'message': 'Conference room booked. Pay via M-Pesa to confirm.', 'booking': {'id': booking.id, 'room': room.name, 'date': booking_date, 'time': f'{start_time} - {end_time}', 'hours': hours, 'base_price': str(base_price), 'selected_packages': selected_packages, 'extra_charges': str(extra_charges), 'total_price': str(total_price), 'status': booking.status, 'next_step': f'POST /api/mpesa/pay/ with booking_id: CONF-{booking.id}'}}, status=status.HTTP_201_CREATED)
 
 
 ### ==================== GUEST: MY CONFERENCE BOOKINGS ====================
@@ -204,13 +169,7 @@ def my_conference_bookings(request):
     bookings = ConferenceBooking.objects.filter(guest=request.user).order_by('-created_at')
     data = []
     for b in bookings:
-        data.append({
-            'id': b.id, 'room': b.conference_room.name,
-            'date': b.booking_date, 'time': f'{b.start_time} - {b.end_time}',
-            'guests': b.guests, 'packages': b.selected_packages,
-            'total_price': str(b.total_price),
-            'status': b.status, 'payment_status': b.payment_status,
-        })
+        data.append({'id': b.id, 'room': b.conference_room.name, 'date': b.booking_date, 'time': f'{b.start_time} - {b.end_time}', 'guests': b.guests, 'packages': b.selected_packages, 'total_price': str(b.total_price), 'status': b.status, 'payment_status': b.payment_status})
     return Response({'bookings': data})
 
 
@@ -250,13 +209,7 @@ def all_conference_bookings(request):
     bookings = ConferenceBooking.objects.all().order_by('-created_at')
     data = []
     for b in bookings:
-        data.append({
-            'id': b.id, 'guest': b.guest.username, 'room': b.conference_room.name,
-            'date': b.booking_date, 'time': f'{b.start_time} - {b.end_time}',
-            'guests': b.guests, 'packages': b.selected_packages,
-            'total_price': str(b.total_price),
-            'status': b.status, 'payment_status': b.payment_status,
-        })
+        data.append({'id': b.id, 'guest': b.guest.username, 'room': b.conference_room.name, 'date': b.booking_date, 'time': f'{b.start_time} - {b.end_time}', 'guests': b.guests, 'packages': b.selected_packages, 'total_price': str(b.total_price), 'status': b.status, 'payment_status': b.payment_status})
     return Response({'bookings': data})
 
 
