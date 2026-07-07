@@ -6,7 +6,6 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.renderers import JSONRenderer, BrowsableAPIRenderer
 from rest_framework_simplejwt.tokens import RefreshToken
-from decouple import config
 from .models import UserProfile
 from .permissions import IsGuest, IsStaff, IsAdmin
 from .serializers import RegisterSerializer, LoginSerializer
@@ -30,7 +29,7 @@ class RegisterView(APIView):
                 'username': {'type': 'string', 'required': True},
                 'email': {'type': 'email', 'required': True},
                 'password': {'type': 'password', 'required': True},
-                'role': {'type': 'choice', 'choices': ['guest', 'staff', 'admin'], 'default': 'guest'}
+                'role': {'type': 'choice', 'choices': ['guest'], 'default': 'guest'}
             }
         })
 
@@ -44,34 +43,55 @@ class RegisterView(APIView):
         password = serializer.validated_data['password']
         role = serializer.validated_data.get('role', 'guest')
 
-        # Load fixed passwords from .env
-        STAFF_PASSWORD = config('STAFF_PASSWORD', default='111111')
-        ADMIN_PASSWORD = config('ADMIN_PASSWORD', default='000000')
+        # Password length validation
+        if len(password) < 6:
+            return Response(
+                {'error': 'Password must be at least 6 characters long'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # Staff password check
-        if role == 'staff' and password != STAFF_PASSWORD:
-            return Response({'error': 'Incorrect staff password'}, status=status.HTTP_400_BAD_REQUEST)
+        # Only allow guest registration (staff and admin are created by admin)
+        if role in ['staff', 'admin']:
+            return Response(
+                {'error': 'Staff and Admin accounts can only be created by an administrator.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # Admin password check
-        if role == 'admin' and password != ADMIN_PASSWORD:
-            return Response({'error': 'Incorrect admin password'}, status=status.HTTP_400_BAD_REQUEST)
-
+        # Check if username exists
         if User.objects.filter(username=username).exists():
-            return Response({'error': 'Username already taken'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Username already taken. Please choose a different username.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        # Check if email exists
         if User.objects.filter(email=email).exists():
-            return Response({'error': 'Email already registered'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Email already registered. Please use a different email or login.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        # Create user (only guests can register)
         user = User.objects.create_user(username=username, email=email, password=password)
-        is_approved = True if role in ['guest', 'admin'] else False
-        UserProfile.objects.create(user=user, role=role, is_approved=is_approved)
+        UserProfile.objects.create(
+            user=user, 
+            role='guest', 
+            is_approved=True,
+            must_change_password=False
+        )
 
         tokens = get_tokens_for_user(user)
 
         return Response({
             'message': 'Registration successful',
             'tokens': tokens,
-            'user': {'id': user.id, 'username': user.username, 'email': user.email, 'role': role}
+            'user': {
+                'id': user.id, 
+                'username': user.username, 
+                'email': user.email, 
+                'role': 'guest',
+                'must_change_password': False
+            }
         }, status=status.HTTP_201_CREATED)
 
 
@@ -96,25 +116,37 @@ class LoginView(APIView):
         username = serializer.validated_data['username']
         password = serializer.validated_data['password']
 
-        STAFF_PASSWORD = config('STAFF_PASSWORD', default='111111')
-        ADMIN_PASSWORD = config('ADMIN_PASSWORD', default='000000')
+        # Check if username exists
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'Username not found. Please check your username or register.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
+        # Authenticate user
         user = authenticate(username=username, password=password)
 
         if user is None:
-            try:
-                user = User.objects.get(username=username)
-                if hasattr(user, 'profile'):
-                    if user.profile.role == 'staff' and password == STAFF_PASSWORD:
-                        user.backend = 'django.contrib.auth.backends.ModelBackend'
-                    elif user.profile.role == 'admin' and password == ADMIN_PASSWORD:
-                        user.backend = 'django.contrib.auth.backends.ModelBackend'
-                    else:
-                        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-                else:
-                    return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-            except User.DoesNotExist:
-                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {'error': 'Incorrect password. Please try again or reset your password.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Check if user is approved (for staff)
+        try:
+            profile = UserProfile.objects.get(user=user)
+            if profile.role in ['staff', 'admin'] and not profile.is_approved:
+                return Response(
+                    {'error': 'Your account is pending approval. Please wait for admin approval.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Check if password change is required
+            must_change_password = profile.must_change_password
+        except UserProfile.DoesNotExist:
+            must_change_password = False
 
         tokens = get_tokens_for_user(user)
         role = user.profile.role if hasattr(user, 'profile') else 'guest'
@@ -122,7 +154,13 @@ class LoginView(APIView):
         return Response({
             'message': 'Login successful',
             'tokens': tokens,
-            'user': {'id': user.id, 'username': user.username, 'email': user.email, 'role': role}
+            'user': {
+                'id': user.id, 
+                'username': user.username, 
+                'email': user.email, 
+                'role': role,
+                'must_change_password': must_change_password
+            }
         })
 
 
@@ -141,9 +179,77 @@ class CurrentUserView(APIView):
     def get(self, request):
         user = request.user
         role = user.profile.role if hasattr(user, 'profile') else 'guest'
+        must_change_password = user.profile.must_change_password if hasattr(user, 'profile') else False
         return Response({
-            'user': {'id': user.id, 'username': user.username, 'email': user.email, 'role': role}
+            'user': {
+                'id': user.id, 
+                'username': user.username, 
+                'email': user.email, 
+                'role': role,
+                'must_change_password': must_change_password
+            }
         })
+
+
+### ==================== CHANGE PASSWORD VIEW ====================
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        old_password = request.data.get('old_password')
+        new_password = request.data.get('new_password')
+
+        if not old_password or not new_password:
+            return Response(
+                {'error': 'Current password and new password are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if len(new_password) < 6:
+            return Response(
+                {'error': 'New password must be at least 6 characters long'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = request.user
+
+        # Check old password
+        if not user.check_password(old_password):
+            return Response(
+                {'error': 'Current password is incorrect'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+
+        # Clear the must_change_password flag
+        try:
+            profile = UserProfile.objects.get(user=user)
+            profile.must_change_password = False
+            profile.save()
+        except UserProfile.DoesNotExist:
+            pass
+
+        return Response({
+            'message': 'Password changed successfully',
+            'password_updated': True
+        })
+
+
+### ==================== CHECK PASSWORD CHANGE REQUIRED ====================
+class CheckForcePasswordChangeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = UserProfile.objects.get(user=request.user)
+            return Response({
+                'must_change_password': profile.must_change_password
+            })
+        except UserProfile.DoesNotExist:
+            return Response({'must_change_password': False})
 
 
 ### ==================== GUEST DASHBOARD ====================

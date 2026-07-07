@@ -1,15 +1,17 @@
 from django.urls import path, include
 from django.http import JsonResponse
 from django.shortcuts import render
-from hotel_app import room_views, table_views, conference_views, venue_views, staff_views  # Add staff_views
+from hotel_app import room_views, table_views, conference_views, venue_views, staff_views, refund_views
 from hotel_app.auth_views import (
     RegisterView, LoginView, LogoutView, CurrentUserView,
-    GuestDashboardView, StaffDashboardView
+    GuestDashboardView, StaffDashboardView, ChangePasswordView,
+    CheckForcePasswordChangeView
 )
 from hotel_app.admin_views import (
     AdminDashboardView, UnapproveStaffView, UserListView, PendingStaffView,
     ApproveStaffView, RejectStaffView,
-    ListGuestsView, ListStaffView, ListAdminsView, DeleteUserView
+    ListGuestsView, ListStaffView, ListAdminsView, DeleteUserView,
+    AdminCreateStaffView, CreateAdminView, UpdateUserRoleView
 )
 from hotel_app import profile_views
 
@@ -47,6 +49,8 @@ urlpatterns = [
     path('api/auth/login/', LoginView.as_view(), name='login'),
     path('api/auth/logout/', LogoutView.as_view(), name='logout'),
     path('api/auth/me/', CurrentUserView.as_view(), name='current_user'),
+    path('api/auth/change-password/', ChangePasswordView.as_view(), name='change_password'),
+    path('api/auth/check-password-change/', CheckForcePasswordChangeView.as_view(), name='check_password_change'),
 
     ### ==================== DASHBOARDS ====================
     path('api/guest/dashboard/', GuestDashboardView.as_view(), name='guest_dashboard'),
@@ -66,6 +70,18 @@ urlpatterns = [
     path('api/admin/staff/unapprove/', UnapproveStaffView.as_view(), name='admin_unapprove_staff'),
     path('api/admin/staff/reject/', RejectStaffView.as_view(), name='admin_reject_staff'),
     path('api/admin/users/<int:user_id>/delete/', DeleteUserView.as_view(), name='admin_delete_user'),
+    path('api/admin/users/<int:user_id>/role/', UpdateUserRoleView.as_view(), name='update_user_role'),
+    
+    ### ==================== ADMIN CREATE STAFF ====================
+    path('api/admin/staff/create/', AdminCreateStaffView.as_view(), name='admin_create_staff'),
+    path('api/auth/create-admin/', CreateAdminView.as_view(), name='create_admin'),
+
+    ### ==================== CANCELLATION & REFUND ====================
+    path('api/cancellation/request/', refund_views.RequestCancellationView.as_view(), name='request_cancellation'),
+    path('api/cancellation/requests/', refund_views.ViewCancellationRequestsView.as_view(), name='view_cancellation_requests'),
+    path('api/cancellation/<int:request_id>/approve/', refund_views.ApproveCancellationView.as_view(), name='approve_cancellation'),
+    path('api/cancellation/<int:request_id>/reject/', refund_views.RejectCancellationView.as_view(), name='reject_cancellation'),
+    path('api/refund/<int:refund_id>/process/', refund_views.ProcessRefundView.as_view(), name='process_refund'),
 
     ### ==================== PROFILE ====================
     path('api/profile/', profile_views.GetProfileView.as_view(), name='get_profile'),

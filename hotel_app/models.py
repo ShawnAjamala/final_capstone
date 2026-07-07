@@ -45,11 +45,69 @@ class UserProfile(models.Model):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='guest')
     phone = models.CharField(max_length=15, blank=True)
     is_approved = models.BooleanField(default=False)
+    must_change_password = models.BooleanField(default=False)  # Force password change on first login
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"
 
 ### ==================== END OF AUTH MODELS ====================
+
+
+### ==================== CANCELLATION & REFUND MODELS ====================
+
+class CancellationRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    booking_id = models.IntegerField()  # ID of the booking
+    booking_type = models.CharField(max_length=20)  # room, table, conference, venue
+    guest = models.ForeignKey(User, on_delete=models.CASCADE, related_name='cancellation_requests')
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    staff_notes = models.TextField(blank=True, null=True)
+    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_cancellations')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    approved_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Cancellation #{self.id} - {self.guest.username} - {self.booking_type} #{self.booking_id}"
+
+
+class Refund(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    cancellation_request = models.ForeignKey(CancellationRequest, on_delete=models.CASCADE, related_name='refunds')
+    booking_id = models.IntegerField()
+    booking_type = models.CharField(max_length=20)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    phone_number = models.CharField(max_length=15, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_refunds')
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Refund #{self.id} - {self.booking_type} #{self.booking_id} - {self.amount}"
+
+### ==================== END OF CANCELLATION & REFUND MODELS ====================
 
 
 ### ==================== ROOM MODEL ====================
@@ -89,10 +147,13 @@ class Booking(models.Model):
         ('checked_in', 'Checked In'),
         ('checked_out', 'Checked Out'),
         ('cancelled', 'Cancelled'),
+        ('cancellation_requested', 'Cancellation Requested'),  # NEW
     ]
     PAYMENT_STATUS = [
         ('unpaid', 'Unpaid'),
         ('paid', 'Paid'),
+        ('refunded', 'Refunded'),  # NEW
+        ('refund_pending', 'Refund Pending'),  # NEW
     ]
 
     guest = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bookings')
@@ -101,9 +162,11 @@ class Booking(models.Model):
     check_out = models.DateField()
     guests = models.IntegerField(default=1)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='pending')
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='unpaid')
     mpesa_transaction = models.ForeignKey(MpesaTransaction, on_delete=models.SET_NULL, null=True, blank=True)
+    cancellation_reason = models.TextField(blank=True, null=True)  # NEW
+    cancelled_at = models.DateTimeField(blank=True, null=True)  # NEW
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -141,10 +204,13 @@ class TableBooking(models.Model):
         ('confirmed', 'Confirmed'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
+        ('cancellation_requested', 'Cancellation Requested'),  # NEW
     ]
     PAYMENT_STATUS = [
         ('unpaid', 'Unpaid'),
         ('paid', 'Paid'),
+        ('refunded', 'Refunded'),  # NEW
+        ('refund_pending', 'Refund Pending'),  # NEW
     ]
 
     guest = models.ForeignKey(User, on_delete=models.CASCADE, related_name='table_bookings')
@@ -154,9 +220,11 @@ class TableBooking(models.Model):
     end_time = models.TimeField()
     guests = models.IntegerField(default=1)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='pending')
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='unpaid')
     mpesa_transaction = models.ForeignKey(MpesaTransaction, on_delete=models.SET_NULL, null=True, blank=True)
+    cancellation_reason = models.TextField(blank=True, null=True)  # NEW
+    cancelled_at = models.DateTimeField(blank=True, null=True)  # NEW
     special_requests = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -196,10 +264,13 @@ class ConferenceBooking(models.Model):
         ('confirmed', 'Confirmed'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
+        ('cancellation_requested', 'Cancellation Requested'),  # NEW
     ]
     PAYMENT_STATUS = [
         ('unpaid', 'Unpaid'),
         ('paid', 'Paid'),
+        ('refunded', 'Refunded'),  # NEW
+        ('refund_pending', 'Refund Pending'),  # NEW
     ]
 
     guest = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conference_bookings')
@@ -210,9 +281,11 @@ class ConferenceBooking(models.Model):
     guests = models.IntegerField(default=1)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     selected_packages = models.TextField(blank=True, help_text="JSON list of selected packages")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='pending')
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='unpaid')
     mpesa_transaction = models.ForeignKey(MpesaTransaction, on_delete=models.SET_NULL, null=True, blank=True)
+    cancellation_reason = models.TextField(blank=True, null=True)  # NEW
+    cancelled_at = models.DateTimeField(blank=True, null=True)  # NEW
     special_requests = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -259,10 +332,13 @@ class VenueBooking(models.Model):
         ('confirmed', 'Confirmed'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
+        ('cancellation_requested', 'Cancellation Requested'),  # NEW
     ]
     PAYMENT_STATUS = [
         ('unpaid', 'Unpaid'),
         ('paid', 'Paid'),
+        ('refunded', 'Refunded'),  # NEW
+        ('refund_pending', 'Refund Pending'),  # NEW
     ]
 
     guest = models.ForeignKey(User, on_delete=models.CASCADE, related_name='venue_bookings')
@@ -272,9 +348,11 @@ class VenueBooking(models.Model):
     guests = models.IntegerField(default=1)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     selected_packages = models.TextField(blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='pending')
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS, default='unpaid')
     mpesa_transaction = models.ForeignKey(MpesaTransaction, on_delete=models.SET_NULL, null=True, blank=True)
+    cancellation_reason = models.TextField(blank=True, null=True)  # NEW
+    cancelled_at = models.DateTimeField(blank=True, null=True)  # NEW
     special_requests = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
