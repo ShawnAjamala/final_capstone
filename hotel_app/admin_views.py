@@ -180,6 +180,64 @@ Grand Horizon Hotel Team
             }, status=status.HTTP_201_CREATED)
 
 
+### ==================== ADMIN CHANGE STAFF PASSWORD ====================
+class AdminChangeStaffPasswordView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            profile = user.profile if hasattr(user, 'profile') else None
+            
+            if not profile:
+                return Response(
+                    {'error': 'User profile not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Only allow changing password for staff and admin users
+            if profile.role not in ['staff', 'admin']:
+                return Response(
+                    {'error': 'Can only change password for staff or admin users'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            new_password = request.data.get('new_password')
+            
+            if not new_password:
+                return Response(
+                    {'error': 'New password is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if len(new_password) < 6:
+                return Response(
+                    {'error': 'Password must be at least 6 characters long'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Set new password
+            user.set_password(new_password)
+            user.save()
+            
+            # Set must_change_password flag to True so staff changes it on next login
+            profile.must_change_password = True
+            profile.save()
+            
+            return Response({
+                'message': f'Password for {user.username} updated successfully',
+                'username': user.username,
+                'role': profile.role,
+                'must_change_password': True
+            })
+            
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'User not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
 ### ==================== LIST ALL USERS ====================
 class UserListView(APIView):
     permission_classes = [IsAuthenticated, IsAdmin]

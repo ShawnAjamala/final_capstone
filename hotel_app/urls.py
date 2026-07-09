@@ -11,7 +11,8 @@ from hotel_app.admin_views import (
     AdminDashboardView, UnapproveStaffView, UserListView, PendingStaffView,
     ApproveStaffView, RejectStaffView,
     ListGuestsView, ListStaffView, ListAdminsView, DeleteUserView,
-    AdminCreateStaffView, CreateAdminView, UpdateUserRoleView
+    AdminCreateStaffView, CreateAdminView, UpdateUserRoleView,
+    AdminChangeStaffPasswordView  # Add this import
 )
 from hotel_app import profile_views
 
@@ -72,6 +73,11 @@ urlpatterns = [
     path('api/admin/users/<int:user_id>/delete/', DeleteUserView.as_view(), name='admin_delete_user'),
     path('api/admin/users/<int:user_id>/role/', UpdateUserRoleView.as_view(), name='update_user_role'),
     
+    ### ==================== ADMIN CHANGE STAFF PASSWORD ====================
+    path('api/admin/users/<int:user_id>/change-password/', 
+         AdminChangeStaffPasswordView.as_view(), 
+         name='admin_change_staff_password'),
+
     ### ==================== ADMIN CREATE STAFF ====================
     path('api/admin/staff/create/', AdminCreateStaffView.as_view(), name='admin_create_staff'),
     path('api/auth/create-admin/', CreateAdminView.as_view(), name='create_admin'),
