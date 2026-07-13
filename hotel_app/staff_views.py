@@ -18,37 +18,30 @@ from .permissions import IsAdminOrStaff
 def staff_analytics(request):
     """
     Get staff analytics dashboard data with refund tracking
-    Gross Revenue = Only ACTIVE bookings (confirmed, checked_in, checked_out) that are NOT refunded
-    Refunds = Only bookings with payment_status='refunded'
+    Gross Revenue = ALL bookings with payment_status='paid' (any date)
+    Refunds = ONLY bookings with payment_status='refunded'
     """
     today = date.today()
     
     # ============ ROOMS ============
     rooms_total = Room.objects.filter(is_active=True).count()
     
-    # Booked today (active bookings that are NOT refunded)
+    # Booked today (active check-ins today)
     rooms_booked_today = Booking.objects.filter(
         status__in=['confirmed', 'checked_in', 'checked_out'],
         check_in__lte=today,
         check_out__gte=today
-    ).exclude(
-        payment_status__in=['refunded', 'refund_pending']  # Exclude cancelled/refunded
     ).count()
     
-    # Gross revenue - ONLY active bookings that are NOT refunded
+    # Gross revenue = ALL paid bookings (ANY date, ANY future)
     rooms_gross_revenue = Booking.objects.filter(
         status__in=['confirmed', 'checked_in', 'checked_out'],
-        check_in__lte=today,
-        check_out__gte=today
-    ).exclude(
-        payment_status__in=['refunded', 'refund_pending']  # Exclude refunded
+        payment_status='paid'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
-    # Refunded amount - ONLY bookings with payment_status='refunded'
+    # Refunded amount = ONLY bookings with payment_status='refunded'
     rooms_refunded = Booking.objects.filter(
-        payment_status='refunded',
-        check_in__lte=today,
-        check_out__gte=today
+        payment_status='refunded'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     # Net revenue (gross - refunds)
@@ -60,20 +53,15 @@ def staff_analytics(request):
     tables_booked_today = TableBooking.objects.filter(
         status='confirmed',
         reservation_date=today
-    ).exclude(
-        payment_status__in=['refunded', 'refund_pending']
     ).count()
     
     tables_gross_revenue = TableBooking.objects.filter(
         status='confirmed',
-        reservation_date=today
-    ).exclude(
-        payment_status__in=['refunded', 'refund_pending']
+        payment_status='paid'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     tables_refunded = TableBooking.objects.filter(
-        payment_status='refunded',
-        reservation_date=today
+        payment_status='refunded'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     tables_net_revenue = tables_gross_revenue - tables_refunded
@@ -84,20 +72,15 @@ def staff_analytics(request):
     conference_booked_today = ConferenceBooking.objects.filter(
         status='confirmed',
         booking_date=today
-    ).exclude(
-        payment_status__in=['refunded', 'refund_pending']
     ).count()
     
     conference_gross_revenue = ConferenceBooking.objects.filter(
         status='confirmed',
-        booking_date=today
-    ).exclude(
-        payment_status__in=['refunded', 'refund_pending']
+        payment_status='paid'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     conference_refunded = ConferenceBooking.objects.filter(
-        payment_status='refunded',
-        booking_date=today
+        payment_status='refunded'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     conference_net_revenue = conference_gross_revenue - conference_refunded
@@ -108,53 +91,44 @@ def staff_analytics(request):
     venues_booked_today = VenueBooking.objects.filter(
         status='confirmed',
         event_date=today
-    ).exclude(
-        payment_status__in=['refunded', 'refund_pending']
     ).count()
     
     venues_gross_revenue = VenueBooking.objects.filter(
         status='confirmed',
-        event_date=today
-    ).exclude(
-        payment_status__in=['refunded', 'refund_pending']
+        payment_status='paid'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     venues_refunded = VenueBooking.objects.filter(
-        payment_status='refunded',
-        event_date=today
+        payment_status='refunded'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     venues_net_revenue = venues_gross_revenue - venues_refunded
     
     # ============ TOTAL REVENUE (All time) ============
-    # Gross revenue - ONLY active bookings NOT refunded
+    # Gross revenue = ALL paid bookings (any date)
     total_gross_revenue = (
         Booking.objects.filter(
-            status__in=['confirmed', 'checked_in', 'checked_out']
-        ).exclude(
-            payment_status__in=['refunded', 'refund_pending']
+            status__in=['confirmed', 'checked_in', 'checked_out'],
+            payment_status='paid'
         ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
         TableBooking.objects.filter(
-            status='confirmed'
-        ).exclude(
-            payment_status__in=['refunded', 'refund_pending']
+            status='confirmed',
+            payment_status='paid'
         ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
         ConferenceBooking.objects.filter(
-            status='confirmed'
-        ).exclude(
-            payment_status__in=['refunded', 'refund_pending']
+            status='confirmed',
+            payment_status='paid'
         ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
         VenueBooking.objects.filter(
-            status='confirmed'
-        ).exclude(
-            payment_status__in=['refunded', 'refund_pending']
+            status='confirmed',
+            payment_status='paid'
         ).aggregate(total=Sum('total_price'))['total'] or 0
     )
     
-    # Total refunds
+    # Total refunds = ONLY 'refunded'
     total_refunds = (
         Booking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
