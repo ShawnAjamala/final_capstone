@@ -18,7 +18,8 @@ from .permissions import IsAdminOrStaff
 def staff_analytics(request):
     """
     Get staff analytics dashboard data with refund tracking
-    Gross Revenue = ALL bookings with payment_status='paid' (any date)
+    Gross Revenue = ALL bookings with payment_status='paid' 
+    (includes confirmed, checked_in, checked_out, and cancellation_requested)
     Refunds = ONLY bookings with payment_status='refunded'
     """
     today = date.today()
@@ -26,16 +27,16 @@ def staff_analytics(request):
     # ============ ROOMS ============
     rooms_total = Room.objects.filter(is_active=True).count()
     
-    # Booked today (active check-ins today)
+    # Booked today
     rooms_booked_today = Booking.objects.filter(
-        status__in=['confirmed', 'checked_in', 'checked_out'],
+        status__in=['confirmed', 'checked_in', 'checked_out', 'cancellation_requested'],
         check_in__lte=today,
         check_out__gte=today
     ).count()
     
-    # Gross revenue = ALL paid bookings (ANY date, ANY future)
+    # Gross revenue = ALL paid bookings (ANY status except cancelled/refunded)
     rooms_gross_revenue = Booking.objects.filter(
-        status__in=['confirmed', 'checked_in', 'checked_out'],
+        status__in=['confirmed', 'checked_in', 'checked_out', 'cancellation_requested'],
         payment_status='paid'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
@@ -51,12 +52,12 @@ def staff_analytics(request):
     tables_total = RestaurantTable.objects.filter(is_active=True).count()
     
     tables_booked_today = TableBooking.objects.filter(
-        status='confirmed',
+        status__in=['confirmed', 'cancellation_requested'],
         reservation_date=today
     ).count()
     
     tables_gross_revenue = TableBooking.objects.filter(
-        status='confirmed',
+        status__in=['confirmed', 'cancellation_requested'],
         payment_status='paid'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
@@ -70,12 +71,12 @@ def staff_analytics(request):
     conference_total = ConferenceRoom.objects.filter(is_active=True).count()
     
     conference_booked_today = ConferenceBooking.objects.filter(
-        status='confirmed',
+        status__in=['confirmed', 'cancellation_requested'],
         booking_date=today
     ).count()
     
     conference_gross_revenue = ConferenceBooking.objects.filter(
-        status='confirmed',
+        status__in=['confirmed', 'cancellation_requested'],
         payment_status='paid'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
@@ -89,12 +90,12 @@ def staff_analytics(request):
     venues_total = Venue.objects.filter(is_active=True).count()
     
     venues_booked_today = VenueBooking.objects.filter(
-        status='confirmed',
+        status__in=['confirmed', 'cancellation_requested'],
         event_date=today
     ).count()
     
     venues_gross_revenue = VenueBooking.objects.filter(
-        status='confirmed',
+        status__in=['confirmed', 'cancellation_requested'],
         payment_status='paid'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
@@ -105,25 +106,25 @@ def staff_analytics(request):
     venues_net_revenue = venues_gross_revenue - venues_refunded
     
     # ============ TOTAL REVENUE (All time) ============
-    # Gross revenue = ALL paid bookings (any date)
+    # Gross revenue = ALL paid bookings (includes cancellation_requested)
     total_gross_revenue = (
         Booking.objects.filter(
-            status__in=['confirmed', 'checked_in', 'checked_out'],
+            status__in=['confirmed', 'checked_in', 'checked_out', 'cancellation_requested'],
             payment_status='paid'
         ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
         TableBooking.objects.filter(
-            status='confirmed',
+            status__in=['confirmed', 'cancellation_requested'],
             payment_status='paid'
         ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
         ConferenceBooking.objects.filter(
-            status='confirmed',
+            status__in=['confirmed', 'cancellation_requested'],
             payment_status='paid'
         ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
         VenueBooking.objects.filter(
-            status='confirmed',
+            status__in=['confirmed', 'cancellation_requested'],
             payment_status='paid'
         ).aggregate(total=Sum('total_price'))['total'] or 0
     )
