@@ -5,7 +5,13 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import UserProfile
+from django.db.models import Sum, Count
+from datetime import date, timedelta
+from .models import (
+    UserProfile, Room, Booking, RestaurantTable, TableBooking,
+    ConferenceRoom, ConferenceBooking, Venue, VenueBooking,
+    CancellationRequest, Refund
+)
 from .permissions import IsAdmin
 import random
 import string
@@ -17,6 +23,139 @@ class AdminDashboardView(APIView):
 
     def get(self, request):
         return Response({'message': 'Welcome to Admin Dashboard', 'user': request.user.username})
+
+
+### ==================== ADMIN ANALYTICS ====================
+class AdminAnalyticsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        today = date.today()
+        thirty_days_ago = today - timedelta(days=30)
+        
+        # ============ TOTAL REVENUE ============
+        total_gross_revenue = (
+            Booking.objects.filter(status__in=['confirmed', 'checked_in', 'checked_out']).aggregate(total=Sum('total_price'))['total'] or 0
+        ) + (
+            TableBooking.objects.filter(status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+        ) + (
+            ConferenceBooking.objects.filter(status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+        ) + (
+            VenueBooking.objects.filter(status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+        )
+        
+        total_refunds = (
+            Booking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
+        ) + (
+            TableBooking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
+        ) + (
+            ConferenceBooking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
+        ) + (
+            VenueBooking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
+        )
+        
+        total_net_revenue = total_gross_revenue - total_refunds
+        
+        # ============ MONTHLY REVENUE (Last 30 days) ============
+        monthly_gross_revenue = (
+            Booking.objects.filter(
+                created_at__gte=thirty_days_ago,
+                status__in=['confirmed', 'checked_in', 'checked_out']
+            ).aggregate(total=Sum('total_price'))['total'] or 0
+        ) + (
+            TableBooking.objects.filter(
+                created_at__gte=thirty_days_ago,
+                status='confirmed'
+            ).aggregate(total=Sum('total_price'))['total'] or 0
+        ) + (
+            ConferenceBooking.objects.filter(
+                created_at__gte=thirty_days_ago,
+                status='confirmed'
+            ).aggregate(total=Sum('total_price'))['total'] or 0
+        ) + (
+            VenueBooking.objects.filter(
+                created_at__gte=thirty_days_ago,
+                status='confirmed'
+            ).aggregate(total=Sum('total_price'))['total'] or 0
+        )
+        
+        monthly_refunds = (
+            Refund.objects.filter(
+                created_at__gte=thirty_days_ago,
+                status='completed'
+            ).aggregate(total=Sum('amount'))['total'] or 0
+        )
+        
+        monthly_net_revenue = monthly_gross_revenue - monthly_refunds
+        
+        # ============ REFUNDS BY STAFF ============
+        refunds_by_staff = Refund.objects.filter(
+            status='completed',
+            processed_by__isnull=False
+        ).values('processed_by__username').annotate(
+            total_refunds=Sum('amount'),
+            refund_count=Count('id')
+        ).order_by('-total_refunds')
+        
+        # ============ PENDING ACTIONS ============
+        pending_cancellations = CancellationRequest.objects.filter(status='pending').count()
+        pending_refunds = Refund.objects.filter(status__in=['pending', 'processing']).count()
+        
+        # ============ RESOURCE COUNTS ============
+        rooms_total = Room.objects.filter(is_active=True).count()
+        tables_total = RestaurantTable.objects.filter(is_active=True).count()
+        conference_total = ConferenceRoom.objects.filter(is_active=True).count()
+        venues_total = Venue.objects.filter(is_active=True).count()
+        
+        # ============ BOOKINGS TODAY ============
+        rooms_booked_today = Booking.objects.filter(
+            status__in=['confirmed', 'checked_in', 'checked_out'],
+            check_in__lte=today,
+            check_out__gte=today
+        ).count()
+        
+        tables_booked_today = TableBooking.objects.filter(
+            status='confirmed',
+            reservation_date=today
+        ).count()
+        
+        conference_booked_today = ConferenceBooking.objects.filter(
+            status='confirmed',
+            booking_date=today
+        ).count()
+        
+        venues_booked_today = VenueBooking.objects.filter(
+            status='confirmed',
+            event_date=today
+        ).count()
+        
+        return Response({
+            'total_gross_revenue': int(total_gross_revenue),
+            'total_refunds': int(total_refunds),
+            'total_net_revenue': int(total_net_revenue),
+            'monthly_gross_revenue': int(monthly_gross_revenue),
+            'monthly_refunds': int(monthly_refunds),
+            'monthly_net_revenue': int(monthly_net_revenue),
+            'pending_cancellations': pending_cancellations,
+            'pending_refunds': pending_refunds,
+            'refunds_by_staff': list(refunds_by_staff),
+            'rooms': {
+                'total': rooms_total,
+                'booked_today': rooms_booked_today,
+            },
+            'tables': {
+                'total': tables_total,
+                'booked_today': tables_booked_today,
+            },
+            'conference': {
+                'total': conference_total,
+                'booked_today': conference_booked_today,
+            },
+            'venues': {
+                'total': venues_total,
+                'booked_today': venues_booked_today,
+            },
+        })
 
 
 ### ==================== CREATE ADMIN (FIRST TIME ONLY) ====================
@@ -131,7 +270,7 @@ class AdminCreateStaffView(APIView):
             user=user,
             role=role,
             is_approved=True,
-            must_change_password=True  # Force password change on first login
+            must_change_password=True
         )
 
         # Send email with credentials

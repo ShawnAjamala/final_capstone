@@ -12,7 +12,7 @@ from hotel_app.admin_views import (
     ApproveStaffView, RejectStaffView,
     ListGuestsView, ListStaffView, ListAdminsView, DeleteUserView,
     AdminCreateStaffView, CreateAdminView, UpdateUserRoleView,
-    AdminChangeStaffPasswordView  # Add this import
+    AdminChangeStaffPasswordView, AdminAnalyticsView  # Added AdminAnalyticsView
 )
 from hotel_app import profile_views
 
@@ -60,6 +60,9 @@ urlpatterns = [
 
     ### ==================== STAFF ANALYTICS ====================
     path('api/staff/analytics/', staff_views.staff_analytics, name='staff_analytics'),
+
+    ### ==================== ADMIN ANALYTICS ====================
+    path('api/admin/analytics/', AdminAnalyticsView.as_view(), name='admin_analytics'),
 
     ### ==================== ADMIN USER MANAGEMENT ====================
     path('api/admin/users/', UserListView.as_view(), name='admin_users'),
