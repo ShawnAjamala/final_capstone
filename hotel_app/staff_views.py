@@ -18,28 +18,30 @@ from .permissions import IsAdminOrStaff
 def staff_analytics(request):
     """
     Get staff analytics dashboard data with refund tracking
-    Returns counts, gross revenue, refunds, and net revenue for all resources
+    Refunds are ONLY deducted when payment_status = 'refunded'
     """
     today = date.today()
     
     # ============ ROOMS ============
     rooms_total = Room.objects.filter(is_active=True).count()
     
-    # Booked today
+    # Booked today (active bookings)
     rooms_booked_today = Booking.objects.filter(
         status__in=['confirmed', 'checked_in', 'checked_out'],
         check_in__lte=today,
         check_out__gte=today
     ).count()
     
-    # Gross revenue (total payments)
+    # Gross revenue - ONLY paid bookings (not refunded)
     rooms_gross_revenue = Booking.objects.filter(
         status__in=['confirmed', 'checked_in', 'checked_out'],
         check_in__lte=today,
         check_out__gte=today
+    ).exclude(
+        payment_status='refunded'  # Exclude refunded bookings from gross
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
-    # Refunded amount
+    # Refunded amount - ONLY bookings with payment_status='refunded'
     rooms_refunded = Booking.objects.filter(
         payment_status='refunded',
         check_in__lte=today,
@@ -60,6 +62,8 @@ def staff_analytics(request):
     tables_gross_revenue = TableBooking.objects.filter(
         status='confirmed',
         reservation_date=today
+    ).exclude(
+        payment_status='refunded'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     tables_refunded = TableBooking.objects.filter(
@@ -80,6 +84,8 @@ def staff_analytics(request):
     conference_gross_revenue = ConferenceBooking.objects.filter(
         status='confirmed',
         booking_date=today
+    ).exclude(
+        payment_status='refunded'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     conference_refunded = ConferenceBooking.objects.filter(
@@ -100,6 +106,8 @@ def staff_analytics(request):
     venues_gross_revenue = VenueBooking.objects.filter(
         status='confirmed',
         event_date=today
+    ).exclude(
+        payment_status='refunded'
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
     venues_refunded = VenueBooking.objects.filter(
@@ -110,18 +118,34 @@ def staff_analytics(request):
     venues_net_revenue = venues_gross_revenue - venues_refunded
     
     # ============ TOTAL REVENUE (All time) ============
-    # Gross revenue
+    # Gross revenue (all time, excluding refunded)
     total_gross_revenue = (
-        Booking.objects.filter(status__in=['confirmed', 'checked_in', 'checked_out']).aggregate(total=Sum('total_price'))['total'] or 0
+        Booking.objects.filter(
+            status__in=['confirmed', 'checked_in', 'checked_out']
+        ).exclude(
+            payment_status='refunded'
+        ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
-        TableBooking.objects.filter(status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+        TableBooking.objects.filter(
+            status='confirmed'
+        ).exclude(
+            payment_status='refunded'
+        ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
-        ConferenceBooking.objects.filter(status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+        ConferenceBooking.objects.filter(
+            status='confirmed'
+        ).exclude(
+            payment_status='refunded'
+        ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
-        VenueBooking.objects.filter(status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+        VenueBooking.objects.filter(
+            status='confirmed'
+        ).exclude(
+            payment_status='refunded'
+        ).aggregate(total=Sum('total_price'))['total'] or 0
     )
     
-    # Total refunds
+    # Total refunds (all time)
     total_refunds = (
         Booking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
