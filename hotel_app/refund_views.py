@@ -28,7 +28,6 @@ class RequestCancellationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get the booking based on type
         booking_models = {
             'room': Booking,
             'table': TableBooking,
@@ -52,7 +51,6 @@ class RequestCancellationView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Check if booking can be cancelled
         if booking.status in ['cancelled', 'completed', 'checked_out']:
             return Response(
                 {'error': 'This booking cannot be cancelled'},
@@ -65,14 +63,12 @@ class RequestCancellationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if booking is paid
         if booking.payment_status != 'paid':
             return Response(
                 {'error': 'Only paid bookings can be cancelled and refunded'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Create cancellation request
         cancellation_request = CancellationRequest.objects.create(
             booking_id=booking_id,
             booking_type=booking_type,
@@ -81,7 +77,6 @@ class RequestCancellationView(APIView):
             status='pending'
         )
 
-        # Update booking status
         booking.status = 'cancellation_requested'
         booking.cancellation_reason = reason
         booking.save()
@@ -106,7 +101,6 @@ class ViewCancellationRequestsView(APIView):
         
         data = []
         for req in requests:
-            # Get booking details based on type
             booking_models = {
                 'room': Booking,
                 'table': TableBooking,
@@ -159,7 +153,6 @@ class ApproveCancellationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get the booking
         booking_models = {
             'room': Booking,
             'table': TableBooking,
@@ -183,10 +176,8 @@ class ApproveCancellationView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Calculate refund amount (full refund if not checked in)
         refund_amount = booking.total_price if booking.status != 'checked_in' else 0
 
-        # Create refund record
         refund = Refund.objects.create(
             cancellation_request=cancellation_request,
             booking_id=booking.id,
@@ -197,7 +188,6 @@ class ApproveCancellationView(APIView):
             processed_by=request.user
         )
 
-        # Update cancellation request
         cancellation_request.status = 'approved'
         cancellation_request.approved_by = request.user
         cancellation_request.approved_at = timezone.now()
@@ -205,7 +195,6 @@ class ApproveCancellationView(APIView):
         cancellation_request.staff_notes = request.data.get('staff_notes', '')
         cancellation_request.save()
 
-        # Update booking
         booking.status = 'cancelled'
         booking.cancelled_at = timezone.now()
         if refund_amount > 0:
@@ -234,7 +223,6 @@ class RejectCancellationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get the booking
         booking_models = {
             'room': Booking,
             'table': TableBooking,
@@ -258,12 +246,10 @@ class RejectCancellationView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Update cancellation request
         cancellation_request.status = 'rejected'
         cancellation_request.staff_notes = request.data.get('staff_notes', '')
         cancellation_request.save()
 
-        # Revert booking status
         booking.status = 'confirmed'
         booking.cancellation_reason = None
         booking.save()
@@ -289,19 +275,15 @@ class ProcessRefundView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Process refund
         refund.status = 'processing'
         refund.save()
 
-        # Generate transaction ID
         transaction_id = f"REF-{refund.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
         
-        # Mark as completed
         refund.status = 'completed'
         refund.transaction_id = transaction_id
         refund.save()
 
-        # Update booking payment status
         booking_models = {
             'room': Booking,
             'table': TableBooking,
@@ -324,3 +306,26 @@ class ProcessRefundView(APIView):
             'amount': str(refund.amount),
             'status': 'completed'
         })
+
+
+### ==================== GET REFUND BY REQUEST (NEW) ====================
+class GetRefundByRequestView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def get(self, request, request_id):
+        try:
+            refund = Refund.objects.get(cancellation_request_id=request_id)
+            return Response({
+                'id': refund.id,
+                'status': refund.status,
+                'amount': refund.amount,
+                'booking_id': refund.booking_id,
+                'booking_type': refund.booking_type,
+                'created_at': refund.created_at,
+                'processed_by': refund.processed_by.username if refund.processed_by else None,
+            })
+        except Refund.DoesNotExist:
+            return Response(
+                {'error': 'Refund not found for this request'},
+                status=status.HTTP_404_NOT_FOUND
+            )

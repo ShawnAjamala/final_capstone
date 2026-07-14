@@ -12,7 +12,7 @@ from hotel_app.admin_views import (
     ApproveStaffView, RejectStaffView,
     ListGuestsView, ListStaffView, ListAdminsView, DeleteUserView,
     AdminCreateStaffView, CreateAdminView, UpdateUserRoleView,
-    AdminChangeStaffPasswordView, AdminAnalyticsView  # Added AdminAnalyticsView
+    AdminChangeStaffPasswordView, AdminAnalyticsView
 )
 from hotel_app import profile_views
 
@@ -91,6 +91,7 @@ urlpatterns = [
     path('api/cancellation/<int:request_id>/approve/', refund_views.ApproveCancellationView.as_view(), name='approve_cancellation'),
     path('api/cancellation/<int:request_id>/reject/', refund_views.RejectCancellationView.as_view(), name='reject_cancellation'),
     path('api/refund/<int:refund_id>/process/', refund_views.ProcessRefundView.as_view(), name='process_refund'),
+    path('api/refund/by-request/<int:request_id>/', refund_views.GetRefundByRequestView.as_view(), name='get_refund_by_request'),
 
     ### ==================== PROFILE ====================
     path('api/profile/', profile_views.GetProfileView.as_view(), name='get_profile'),
