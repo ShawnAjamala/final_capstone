@@ -181,10 +181,23 @@ def book_room(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsGuest])
 def my_bookings(request):
-    bookings = Booking.objects.filter(guest=request.user).order_by('-created_at')
+    # Only show non-deleted bookings
+    bookings = Booking.objects.filter(
+        guest=request.user,
+        is_deleted=False
+    ).order_by('-created_at')
     data = []
     for b in bookings:
-        data.append({'id': b.id, 'room': b.room.room_number, 'room_type': b.room.room_type, 'check_in': b.check_in, 'check_out': b.check_out, 'total_price': str(b.total_price), 'status': b.status, 'payment_status': b.payment_status})
+        data.append({
+            'id': b.id, 
+            'room': b.room.room_number, 
+            'room_type': b.room.room_type, 
+            'check_in': b.check_in, 
+            'check_out': b.check_out, 
+            'total_price': str(b.total_price), 
+            'status': b.status, 
+            'payment_status': b.payment_status
+        })
     return Response({'bookings': data})
 
 
@@ -207,10 +220,22 @@ def cancel_booking(request, booking_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdminOrStaff])
 def all_bookings(request):
+    # Show all bookings including deleted ones for staff/admin
     bookings = Booking.objects.all().order_by('-created_at')
     data = []
     for b in bookings:
-        data.append({'id': b.id, 'guest': b.guest.username, 'room': b.room.room_number, 'check_in': b.check_in, 'check_out': b.check_out, 'guests': b.guests, 'total_price': str(b.total_price), 'status': b.status, 'payment_status': b.payment_status})
+        data.append({
+            'id': b.id, 
+            'guest': b.guest.username, 
+            'room': b.room.room_number, 
+            'check_in': b.check_in, 
+            'check_out': b.check_out, 
+            'guests': b.guests, 
+            'total_price': str(b.total_price), 
+            'status': b.status, 
+            'payment_status': b.payment_status,
+            'is_deleted': b.is_deleted  # Show if booking is deleted
+        })
     return Response({'bookings': data})
 
 
@@ -244,7 +269,7 @@ def check_out(request, booking_id):
     return Response({'message': f'Guest checked out. Room {booking.room.room_number} available.', 'booking_id': booking.id})
 
 
-### ==================== STAFF/ADMIN: DELETE BOOKING ====================
+### ==================== STAFF/ADMIN: DELETE BOOKING (SOFT DELETE) ====================
 @api_view(['DELETE', 'POST'])
 @permission_classes([IsAuthenticated, IsAdminOrStaff])
 def delete_booking(request, booking_id):
@@ -252,13 +277,20 @@ def delete_booking(request, booking_id):
         booking = Booking.objects.get(id=booking_id)
     except Booking.DoesNotExist:
         return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+    
     if booking.status in ['pending', 'confirmed', 'checked_in']:
-        return Response({'error': 'Cannot delete active booking.'}, status=status.HTTP_400_BAD_REQUEST)
-    booking.delete()
-    return Response({'message': 'Booking deleted'})
+        return Response(
+            {'error': 'Cannot delete active booking. Cancel or check-out first.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Soft delete - mark as deleted instead of actually deleting
+    booking.is_deleted = True
+    booking.save()
+    return Response({'message': 'Booking archived successfully'})
 
 
-### ==================== GUEST: DELETE MY COMPLETED BOOKING ====================
+### ==================== GUEST: DELETE MY COMPLETED BOOKING (SOFT DELETE) ====================
 @api_view(['DELETE', 'POST'])
 @permission_classes([IsAuthenticated, IsGuest])
 def delete_my_booking(request, booking_id):
@@ -266,7 +298,15 @@ def delete_my_booking(request, booking_id):
         booking = Booking.objects.get(id=booking_id, guest=request.user)
     except Booking.DoesNotExist:
         return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+
     if booking.status not in ['completed', 'cancelled']:
-        return Response({'error': 'Can only delete completed or cancelled bookings'}, status=status.HTTP_400_BAD_REQUEST)
-    booking.delete()
-    return Response({'message': 'Booking deleted'})
+        return Response(
+            {'error': 'Can only delete completed or cancelled bookings'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Soft delete - mark as deleted instead of actually deleting
+    booking.is_deleted = True
+    booking.save()
+    
+    return Response({'message': 'Booking removed from your view'})

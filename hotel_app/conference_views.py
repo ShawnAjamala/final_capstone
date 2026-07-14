@@ -166,10 +166,24 @@ def conference_book(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsGuest])
 def my_conference_bookings(request):
-    bookings = ConferenceBooking.objects.filter(guest=request.user).order_by('-created_at')
+    # Only show non-deleted bookings
+    bookings = ConferenceBooking.objects.filter(
+        guest=request.user,
+        is_deleted=False
+    ).order_by('-created_at')
     data = []
     for b in bookings:
-        data.append({'id': b.id, 'room': b.conference_room.name, 'date': b.booking_date, 'time': f'{b.start_time} - {b.end_time}', 'guests': b.guests, 'packages': b.selected_packages, 'total_price': str(b.total_price), 'status': b.status, 'payment_status': b.payment_status})
+        data.append({
+            'id': b.id, 
+            'room': b.conference_room.name, 
+            'date': b.booking_date, 
+            'time': f'{b.start_time} - {b.end_time}', 
+            'guests': b.guests, 
+            'packages': b.selected_packages, 
+            'total_price': str(b.total_price), 
+            'status': b.status, 
+            'payment_status': b.payment_status
+        })
     return Response({'bookings': data})
 
 
@@ -188,7 +202,7 @@ def cancel_conference_booking(request, booking_id):
     return Response({'message': 'Booking cancelled'})
 
 
-### ==================== GUEST: DELETE MY CONFERENCE BOOKING ====================
+### ==================== GUEST: DELETE MY CONFERENCE BOOKING (SOFT DELETE) ====================
 @api_view(['DELETE', 'POST'])
 @permission_classes([IsAuthenticated, IsGuest])
 def delete_my_conference_booking(request, booking_id):
@@ -198,18 +212,34 @@ def delete_my_conference_booking(request, booking_id):
         return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
     if booking.status not in ['completed', 'cancelled']:
         return Response({'error': 'Can only delete completed or cancelled bookings'}, status=status.HTTP_400_BAD_REQUEST)
-    booking.delete()
-    return Response({'message': 'Booking deleted'})
+    
+    # Soft delete - mark as deleted instead of actually deleting
+    booking.is_deleted = True
+    booking.save()
+    return Response({'message': 'Conference booking removed from your view'})
 
 
 ### ==================== STAFF/ADMIN: ALL CONFERENCE BOOKINGS ====================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdminOrStaff])
 def all_conference_bookings(request):
+    # Show all bookings including deleted ones for staff/admin
     bookings = ConferenceBooking.objects.all().order_by('-created_at')
     data = []
     for b in bookings:
-        data.append({'id': b.id, 'guest': b.guest.username, 'room': b.conference_room.name, 'date': b.booking_date, 'time': f'{b.start_time} - {b.end_time}', 'guests': b.guests, 'packages': b.selected_packages, 'total_price': str(b.total_price), 'status': b.status, 'payment_status': b.payment_status})
+        data.append({
+            'id': b.id, 
+            'guest': b.guest.username, 
+            'room': b.conference_room.name, 
+            'date': b.booking_date, 
+            'time': f'{b.start_time} - {b.end_time}', 
+            'guests': b.guests, 
+            'packages': b.selected_packages, 
+            'total_price': str(b.total_price), 
+            'status': b.status, 
+            'payment_status': b.payment_status,
+            'is_deleted': b.is_deleted
+        })
     return Response({'bookings': data})
 
 
@@ -228,7 +258,7 @@ def complete_conference_booking(request, booking_id):
     return Response({'message': f'Conference room {booking.conference_room.name} is now available.'})
 
 
-### ==================== STAFF/ADMIN: DELETE CONFERENCE BOOKING ====================
+### ==================== STAFF/ADMIN: DELETE CONFERENCE BOOKING (SOFT DELETE) ====================
 @api_view(['DELETE', 'POST'])
 @permission_classes([IsAuthenticated, IsAdminOrStaff])
 def delete_conference_booking(request, booking_id):
@@ -238,5 +268,8 @@ def delete_conference_booking(request, booking_id):
         return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
     if booking.status in ['pending', 'confirmed']:
         return Response({'error': 'Cannot delete active booking'}, status=status.HTTP_400_BAD_REQUEST)
-    booking.delete()
-    return Response({'message': 'Conference booking deleted'})
+    
+    # Soft delete - mark as deleted instead of actually deleting
+    booking.is_deleted = True
+    booking.save()
+    return Response({'message': 'Conference booking archived successfully'})

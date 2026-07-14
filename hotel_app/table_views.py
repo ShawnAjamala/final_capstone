@@ -150,10 +150,23 @@ def reserve_table(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsGuest])
 def my_table_bookings(request):
-    bookings = TableBooking.objects.filter(guest=request.user).order_by('-created_at')
+    # Only show non-deleted bookings
+    bookings = TableBooking.objects.filter(
+        guest=request.user,
+        is_deleted=False
+    ).order_by('-created_at')
     data = []
     for b in bookings:
-        data.append({'id': b.id, 'table': b.table.table_number, 'date': b.reservation_date, 'time': f'{b.start_time} - {b.end_time}', 'guests': b.guests, 'total_price': str(b.total_price), 'status': b.status, 'payment_status': b.payment_status})
+        data.append({
+            'id': b.id, 
+            'table': b.table.table_number, 
+            'date': b.reservation_date, 
+            'time': f'{b.start_time} - {b.end_time}', 
+            'guests': b.guests, 
+            'total_price': str(b.total_price), 
+            'status': b.status, 
+            'payment_status': b.payment_status
+        })
     return Response({'bookings': data})
 
 
@@ -172,14 +185,43 @@ def cancel_table_booking(request, booking_id):
     return Response({'message': 'Booking cancelled. Table is now available.'})
 
 
+### ==================== GUEST: DELETE MY COMPLETED TABLE BOOKING (SOFT DELETE) ====================
+@api_view(['DELETE', 'POST'])
+@permission_classes([IsAuthenticated, IsGuest])
+def delete_my_table_booking(request, booking_id):
+    try:
+        booking = TableBooking.objects.get(id=booking_id, guest=request.user)
+    except TableBooking.DoesNotExist:
+        return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
+    if booking.status not in ['completed', 'cancelled']:
+        return Response({'error': 'Can only delete completed or cancelled bookings'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Soft delete - mark as deleted instead of actually deleting
+    booking.is_deleted = True
+    booking.save()
+    return Response({'message': 'Table booking removed from your view'})
+
+
 ### ==================== STAFF/ADMIN: ALL TABLE BOOKINGS ====================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdminOrStaff])
 def all_table_bookings(request):
+    # Show all bookings including deleted ones for staff/admin
     bookings = TableBooking.objects.all().order_by('-created_at')
     data = []
     for b in bookings:
-        data.append({'id': b.id, 'guest': b.guest.username, 'table': b.table.table_number, 'date': b.reservation_date, 'time': f'{b.start_time} - {b.end_time}', 'guests': b.guests, 'total_price': str(b.total_price), 'status': b.status, 'payment_status': b.payment_status})
+        data.append({
+            'id': b.id, 
+            'guest': b.guest.username, 
+            'table': b.table.table_number, 
+            'date': b.reservation_date, 
+            'time': f'{b.start_time} - {b.end_time}', 
+            'guests': b.guests, 
+            'total_price': str(b.total_price), 
+            'status': b.status, 
+            'payment_status': b.payment_status,
+            'is_deleted': b.is_deleted
+        })
     return Response({'bookings': data})
 
 
@@ -198,7 +240,7 @@ def complete_table_booking(request, booking_id):
     return Response({'message': f'Table {booking.table.table_number} is now available.'})
 
 
-### ==================== STAFF/ADMIN: DELETE TABLE BOOKING ====================
+### ==================== STAFF/ADMIN: DELETE TABLE BOOKING (SOFT DELETE) ====================
 @api_view(['DELETE', 'POST'])
 @permission_classes([IsAuthenticated, IsAdminOrStaff])
 def delete_table_booking(request, booking_id):
@@ -208,19 +250,8 @@ def delete_table_booking(request, booking_id):
         return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
     if booking.status in ['pending', 'confirmed']:
         return Response({'error': 'Cannot delete active booking.'}, status=status.HTTP_400_BAD_REQUEST)
-    booking.delete()
-    return Response({'message': 'Table booking deleted permanently'})
-
-
-### ==================== GUEST: DELETE MY COMPLETED TABLE BOOKING ====================
-@api_view(['DELETE', 'POST'])
-@permission_classes([IsAuthenticated, IsGuest])
-def delete_my_table_booking(request, booking_id):
-    try:
-        booking = TableBooking.objects.get(id=booking_id, guest=request.user)
-    except TableBooking.DoesNotExist:
-        return Response({'error': 'Booking not found'}, status=status.HTTP_404_NOT_FOUND)
-    if booking.status not in ['completed', 'cancelled']:
-        return Response({'error': 'Can only delete completed or cancelled bookings'}, status=status.HTTP_400_BAD_REQUEST)
-    booking.delete()
-    return Response({'message': 'Table booking deleted'})
+    
+    # Soft delete - mark as deleted instead of actually deleting
+    booking.is_deleted = True
+    booking.save()
+    return Response({'message': 'Table booking archived successfully'})

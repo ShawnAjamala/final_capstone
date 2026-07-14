@@ -18,6 +18,8 @@ from .permissions import IsAdminOrStaff
 def staff_analytics(request):
     """
     Get staff analytics dashboard data with refund tracking
+    Gross Revenue = ALL paid bookings (not deleted)
+    Refunds = Count from REFUND model (independent of booking deletion)
     Net Revenue = max(0, Gross Revenue - Refunds) - never goes below 0
     """
     today = date.today()
@@ -28,19 +30,23 @@ def staff_analytics(request):
     rooms_booked_today = Booking.objects.filter(
         status__in=['confirmed', 'checked_in', 'checked_out', 'cancellation_requested'],
         check_in__lte=today,
-        check_out__gte=today
+        check_out__gte=today,
+        is_deleted=False
     ).count()
     
+    # Gross revenue from non-deleted bookings
     rooms_gross_revenue = Booking.objects.filter(
         status__in=['confirmed', 'checked_in', 'checked_out', 'cancellation_requested'],
-        payment_status='paid'
+        payment_status='paid',
+        is_deleted=False
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
-    rooms_refunded = Booking.objects.filter(
-        payment_status__in=['refund_pending', 'refunded']
-    ).aggregate(total=Sum('total_price'))['total'] or 0
+    # Refunds from REFUND model (not from booking payment_status)
+    rooms_refunded = Refund.objects.filter(
+        booking_type='room',
+        status='completed'
+    ).aggregate(total=Sum('amount'))['total'] or 0
     
-    # Net revenue - never negative
     rooms_net_revenue = max(0, rooms_gross_revenue - rooms_refunded)
     
     # ============ TABLES ============
@@ -48,17 +54,20 @@ def staff_analytics(request):
     
     tables_booked_today = TableBooking.objects.filter(
         status__in=['confirmed', 'cancellation_requested'],
-        reservation_date=today
+        reservation_date=today,
+        is_deleted=False
     ).count()
     
     tables_gross_revenue = TableBooking.objects.filter(
         status__in=['confirmed', 'cancellation_requested'],
-        payment_status='paid'
+        payment_status='paid',
+        is_deleted=False
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
-    tables_refunded = TableBooking.objects.filter(
-        payment_status__in=['refund_pending', 'refunded']
-    ).aggregate(total=Sum('total_price'))['total'] or 0
+    tables_refunded = Refund.objects.filter(
+        booking_type='table',
+        status='completed'
+    ).aggregate(total=Sum('amount'))['total'] or 0
     
     tables_net_revenue = max(0, tables_gross_revenue - tables_refunded)
     
@@ -67,17 +76,20 @@ def staff_analytics(request):
     
     conference_booked_today = ConferenceBooking.objects.filter(
         status__in=['confirmed', 'cancellation_requested'],
-        booking_date=today
+        booking_date=today,
+        is_deleted=False
     ).count()
     
     conference_gross_revenue = ConferenceBooking.objects.filter(
         status__in=['confirmed', 'cancellation_requested'],
-        payment_status='paid'
+        payment_status='paid',
+        is_deleted=False
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
-    conference_refunded = ConferenceBooking.objects.filter(
-        payment_status__in=['refund_pending', 'refunded']
-    ).aggregate(total=Sum('total_price'))['total'] or 0
+    conference_refunded = Refund.objects.filter(
+        booking_type='conference',
+        status='completed'
+    ).aggregate(total=Sum('amount'))['total'] or 0
     
     conference_net_revenue = max(0, conference_gross_revenue - conference_refunded)
     
@@ -86,17 +98,20 @@ def staff_analytics(request):
     
     venues_booked_today = VenueBooking.objects.filter(
         status__in=['confirmed', 'cancellation_requested'],
-        event_date=today
+        event_date=today,
+        is_deleted=False
     ).count()
     
     venues_gross_revenue = VenueBooking.objects.filter(
         status__in=['confirmed', 'cancellation_requested'],
-        payment_status='paid'
+        payment_status='paid',
+        is_deleted=False
     ).aggregate(total=Sum('total_price'))['total'] or 0
     
-    venues_refunded = VenueBooking.objects.filter(
-        payment_status__in=['refund_pending', 'refunded']
-    ).aggregate(total=Sum('total_price'))['total'] or 0
+    venues_refunded = Refund.objects.filter(
+        booking_type='venue',
+        status='completed'
+    ).aggregate(total=Sum('amount'))['total'] or 0
     
     venues_net_revenue = max(0, venues_gross_revenue - venues_refunded)
     
@@ -104,36 +119,34 @@ def staff_analytics(request):
     total_gross_revenue = (
         Booking.objects.filter(
             status__in=['confirmed', 'checked_in', 'checked_out', 'cancellation_requested'],
-            payment_status='paid'
+            payment_status='paid',
+            is_deleted=False
         ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
         TableBooking.objects.filter(
             status__in=['confirmed', 'cancellation_requested'],
-            payment_status='paid'
+            payment_status='paid',
+            is_deleted=False
         ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
         ConferenceBooking.objects.filter(
             status__in=['confirmed', 'cancellation_requested'],
-            payment_status='paid'
+            payment_status='paid',
+            is_deleted=False
         ).aggregate(total=Sum('total_price'))['total'] or 0
     ) + (
         VenueBooking.objects.filter(
             status__in=['confirmed', 'cancellation_requested'],
-            payment_status='paid'
+            payment_status='paid',
+            is_deleted=False
         ).aggregate(total=Sum('total_price'))['total'] or 0
     )
     
-    total_refunds = (
-        Booking.objects.filter(payment_status__in=['refund_pending', 'refunded']).aggregate(total=Sum('total_price'))['total'] or 0
-    ) + (
-        TableBooking.objects.filter(payment_status__in=['refund_pending', 'refunded']).aggregate(total=Sum('total_price'))['total'] or 0
-    ) + (
-        ConferenceBooking.objects.filter(payment_status__in=['refund_pending', 'refunded']).aggregate(total=Sum('total_price'))['total'] or 0
-    ) + (
-        VenueBooking.objects.filter(payment_status__in=['refund_pending', 'refunded']).aggregate(total=Sum('total_price'))['total'] or 0
-    )
+    # Total refunds from REFUND model (all types)
+    total_refunds = Refund.objects.filter(
+        status='completed'
+    ).aggregate(total=Sum('amount'))['total'] or 0
     
-    # Net revenue - never goes below 0
     total_net_revenue = max(0, total_gross_revenue - total_refunds)
     
     # ============ CANCELLATION REQUESTS ============
@@ -145,7 +158,7 @@ def staff_analytics(request):
     return Response({
         'total_gross_revenue': int(total_gross_revenue),
         'total_refunds': int(total_refunds),
-        'total_net_revenue': int(total_net_revenue),  # Always >= 0
+        'total_net_revenue': int(total_net_revenue),
         'pending_cancellations': pending_cancellations,
         'pending_refunds': pending_refunds,
         'rooms': {
@@ -153,27 +166,27 @@ def staff_analytics(request):
             'booked_today': rooms_booked_today,
             'gross_revenue': int(rooms_gross_revenue),
             'refunds': int(rooms_refunded),
-            'net_revenue': int(rooms_net_revenue),  # Always >= 0
+            'net_revenue': int(rooms_net_revenue),
         },
         'tables': {
             'total': tables_total,
             'booked_today': tables_booked_today,
             'gross_revenue': int(tables_gross_revenue),
             'refunds': int(tables_refunded),
-            'net_revenue': int(tables_net_revenue),  # Always >= 0
+            'net_revenue': int(tables_net_revenue),
         },
         'conference': {
             'total': conference_total,
             'booked_today': conference_booked_today,
             'gross_revenue': int(conference_gross_revenue),
             'refunds': int(conference_refunded),
-            'net_revenue': int(conference_net_revenue),  # Always >= 0
+            'net_revenue': int(conference_net_revenue),
         },
         'venues': {
             'total': venues_total,
             'booked_today': venues_booked_today,
             'gross_revenue': int(venues_gross_revenue),
             'refunds': int(venues_refunded),
-            'net_revenue': int(venues_net_revenue),  # Always >= 0
+            'net_revenue': int(venues_net_revenue),
         },
     })
