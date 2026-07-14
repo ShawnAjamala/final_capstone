@@ -34,48 +34,67 @@ class AdminAnalyticsView(APIView):
         thirty_days_ago = today - timedelta(days=30)
         
         # ============ TOTAL REVENUE ============
+        # Gross revenue = ALL paid bookings (including cancellation_requested)
         total_gross_revenue = (
-            Booking.objects.filter(status__in=['confirmed', 'checked_in', 'checked_out']).aggregate(total=Sum('total_price'))['total'] or 0
+            Booking.objects.filter(
+                status__in=['confirmed', 'checked_in', 'checked_out', 'cancellation_requested'],
+                payment_status='paid'
+            ).aggregate(total=Sum('total_price'))['total'] or 0
         ) + (
-            TableBooking.objects.filter(status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+            TableBooking.objects.filter(
+                status__in=['confirmed', 'cancellation_requested'],
+                payment_status='paid'
+            ).aggregate(total=Sum('total_price'))['total'] or 0
         ) + (
-            ConferenceBooking.objects.filter(status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+            ConferenceBooking.objects.filter(
+                status__in=['confirmed', 'cancellation_requested'],
+                payment_status='paid'
+            ).aggregate(total=Sum('total_price'))['total'] or 0
         ) + (
-            VenueBooking.objects.filter(status='confirmed').aggregate(total=Sum('total_price'))['total'] or 0
+            VenueBooking.objects.filter(
+                status__in=['confirmed', 'cancellation_requested'],
+                payment_status='paid'
+            ).aggregate(total=Sum('total_price'))['total'] or 0
         )
         
+        # Total refunds = BOTH refund_pending AND refunded
         total_refunds = (
-            Booking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
+            Booking.objects.filter(payment_status__in=['refund_pending', 'refunded']).aggregate(total=Sum('total_price'))['total'] or 0
         ) + (
-            TableBooking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
+            TableBooking.objects.filter(payment_status__in=['refund_pending', 'refunded']).aggregate(total=Sum('total_price'))['total'] or 0
         ) + (
-            ConferenceBooking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
+            ConferenceBooking.objects.filter(payment_status__in=['refund_pending', 'refunded']).aggregate(total=Sum('total_price'))['total'] or 0
         ) + (
-            VenueBooking.objects.filter(payment_status='refunded').aggregate(total=Sum('total_price'))['total'] or 0
+            VenueBooking.objects.filter(payment_status__in=['refund_pending', 'refunded']).aggregate(total=Sum('total_price'))['total'] or 0
         )
         
-        total_net_revenue = total_gross_revenue - total_refunds
+        # Net revenue = max(0, Gross - Refunds)
+        total_net_revenue = max(0, total_gross_revenue - total_refunds)
         
         # ============ MONTHLY REVENUE (Last 30 days) ============
         monthly_gross_revenue = (
             Booking.objects.filter(
                 created_at__gte=thirty_days_ago,
-                status__in=['confirmed', 'checked_in', 'checked_out']
+                status__in=['confirmed', 'checked_in', 'checked_out', 'cancellation_requested'],
+                payment_status='paid'
             ).aggregate(total=Sum('total_price'))['total'] or 0
         ) + (
             TableBooking.objects.filter(
                 created_at__gte=thirty_days_ago,
-                status='confirmed'
+                status__in=['confirmed', 'cancellation_requested'],
+                payment_status='paid'
             ).aggregate(total=Sum('total_price'))['total'] or 0
         ) + (
             ConferenceBooking.objects.filter(
                 created_at__gte=thirty_days_ago,
-                status='confirmed'
+                status__in=['confirmed', 'cancellation_requested'],
+                payment_status='paid'
             ).aggregate(total=Sum('total_price'))['total'] or 0
         ) + (
             VenueBooking.objects.filter(
                 created_at__gte=thirty_days_ago,
-                status='confirmed'
+                status__in=['confirmed', 'cancellation_requested'],
+                payment_status='paid'
             ).aggregate(total=Sum('total_price'))['total'] or 0
         )
         
@@ -86,7 +105,7 @@ class AdminAnalyticsView(APIView):
             ).aggregate(total=Sum('amount'))['total'] or 0
         )
         
-        monthly_net_revenue = monthly_gross_revenue - monthly_refunds
+        monthly_net_revenue = max(0, monthly_gross_revenue - monthly_refunds)
         
         # ============ REFUNDS BY STAFF ============
         refunds_by_staff = Refund.objects.filter(
@@ -109,25 +128,31 @@ class AdminAnalyticsView(APIView):
         
         # ============ BOOKINGS TODAY ============
         rooms_booked_today = Booking.objects.filter(
-            status__in=['confirmed', 'checked_in', 'checked_out'],
+            status__in=['confirmed', 'checked_in', 'checked_out', 'cancellation_requested'],
             check_in__lte=today,
             check_out__gte=today
         ).count()
         
         tables_booked_today = TableBooking.objects.filter(
-            status='confirmed',
+            status__in=['confirmed', 'cancellation_requested'],
             reservation_date=today
         ).count()
         
         conference_booked_today = ConferenceBooking.objects.filter(
-            status='confirmed',
+            status__in=['confirmed', 'cancellation_requested'],
             booking_date=today
         ).count()
         
         venues_booked_today = VenueBooking.objects.filter(
-            status='confirmed',
+            status__in=['confirmed', 'cancellation_requested'],
             event_date=today
         ).count()
+        
+        # ============ USER COUNTS ============
+        guests = UserProfile.objects.filter(role='guest').count()
+        staff = UserProfile.objects.filter(role='staff', is_approved=True).count()
+        pending = UserProfile.objects.filter(role='staff', is_approved=False).count()
+        admins = UserProfile.objects.filter(role='admin').count()
         
         return Response({
             'total_gross_revenue': int(total_gross_revenue),
@@ -139,6 +164,12 @@ class AdminAnalyticsView(APIView):
             'pending_cancellations': pending_cancellations,
             'pending_refunds': pending_refunds,
             'refunds_by_staff': list(refunds_by_staff),
+            'users': {
+                'guests': guests,
+                'staff': staff,
+                'pending': pending,
+                'admins': admins,
+            },
             'rooms': {
                 'total': rooms_total,
                 'booked_today': rooms_booked_today,
