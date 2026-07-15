@@ -8,66 +8,85 @@ Django REST Framework backend for a complete hotel management system with M-Pesa
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Setup & Installation](#setup--installation)
+- [Authentication Flow](#authentication-flow)
+- [Staff Approval System](#staff-approval-system)
+- [M-Pesa Payment Flow](#m-pesa-payment-flow)
+- [Image Management](#image-management)
+- [Deployment (Render)](#deployment-render)
+- [Known Issues](#known-issues)
+- [Author](#author)
+
+---
+
 ## Overview
 
 This backend powers the Grand Horizon Hotel platform — a full-featured hotel management API supporting room booking, restaurant table reservations, conference room booking, event venue management, and M-Pesa mobile payments.
 
 ### Core Modules
 
-- Authentication — JWT-based auth with 3 roles (Guest, Staff, Admin)
-- Room Booking — Browse, book, pay, check-in/out
-- Restaurant Tables — Browse, reserve, pay, complete
-- Conference Rooms — Browse, book with packages, pay, complete
-- Event Venues — Browse, book by event type, pay, complete
-- M-Pesa Integration — STK Push, callback processing, auto-confirmation
-- Admin Management — User management, staff approval, analytics
-- Profile — View profile, change password, delete account
+- **Authentication** — JWT-based auth with 3 roles (Guest, Staff, Admin)
+- **Room Booking** — Browse, book, pay, check-in/out
+- **Restaurant Tables** — Browse, reserve, pay, complete
+- **Conference Rooms** — Browse, book with packages, pay, complete
+- **Event Venues** — Browse, book by event type, pay, complete
+- **M-Pesa Integration** — STK Push, callback processing, auto-confirmation
+- **Admin Management** — User management, staff approval, analytics
+- **Profile** — View profile, change password, delete account
 
 ---
 
 ## Tech Stack
 
-- Django 5.x
-- Django REST Framework
-- SimpleJWT — JWT authentication
-- Cloudinary — Image hosting
-- PostgreSQL — Production database
-- SQLite — Development database
-- Daraja API — Safaricom M-Pesa integration
-- Gunicorn — Production server
-- django-cors-headers — CORS handling
-- python-decouple — Environment variables
+- **Django 5.x**
+- **Django REST Framework**
+- **SimpleJWT** — JWT authentication
+- **Cloudinary** — Image hosting
+- **PostgreSQL** — Production database
+- **SQLite** — Development database
+- **Daraja API** — Safaricom M-Pesa integration
+- **Gunicorn** — Production server
+- **django-cors-headers** — CORS handling
+- **python-decouple** — Environment variables
 
 ---
 
 ## Project Structure
+
+```
 final_capstone/
 ├── hotel_project/
-│ ├── settings.py
-│ ├── urls.py
-│ └── wsgi.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
 ├── hotel_app/
-│ ├── models.py
-│ ├── views.py
-│ ├── auth_views.py
-│ ├── admin_views.py
-│ ├── room_views.py
-│ ├── table_views.py
-│ ├── conference_views.py
-│ ├── venue_views.py
-│ ├── analytics_views.py
-│ ├── profile_views.py
-│ ├── cloudinary_views.py
-│ ├── serializers.py
-│ ├── permissions.py
-│ ├── mpesa.py
-│ ├── urls.py
-│ └── mpesa_urls.py
+│   ├── models.py
+│   ├── views.py
+│   ├── auth_views.py
+│   ├── admin_views.py
+│   ├── room_views.py
+│   ├── table_views.py
+│   ├── conference_views.py
+│   ├── venue_views.py
+│   ├── analytics_views.py
+│   ├── profile_views.py
+│   ├── cloudinary_views.py
+│   ├── serializers.py
+│   ├── permissions.py
+│   ├── mpesa.py
+│   ├── urls.py
+│   └── mpesa_urls.py
 ├── media/
 ├── static/
 ├── requirements.txt
 ├── manage.py
 └── README.md
+```
 
 ---
 
@@ -81,6 +100,8 @@ final_capstone/
 - PostgreSQL (for production)
 
 ### Backend Setup
+
+```bash
 git clone https://github.com/ShawnAjamala/final_capstone.git
 cd final_capstone
 
@@ -92,8 +113,11 @@ pip install -r requirements.txt
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
+```
 
 ### Environment Variables (.env)
+
+```env
 SECRET_KEY=your-secret-key
 DEBUG=True
 
@@ -101,15 +125,14 @@ MPESA_CONSUMER_KEY=your-consumer-key
 MPESA_CONSUMER_SECRET=your-consumer-secret
 MPESA_PASSKEY=your-passkey
 MPESA_SHORTCODE=174379
-MPESA_CALLBACK_URL=https://your-domain.com/api/mpesa/callback/
+MPESA_CALLBACK_URL=https://your-domain.com/your-callback-path/
 
 CLOUDINARY_CLOUD_NAME=your-cloud-name
 CLOUDINARY_API_KEY=your-api-key
 CLOUDINARY_API_SECRET=your-api-secret
-
+```
 
 ---
-
 
 ## Authentication Flow
 
@@ -118,38 +141,41 @@ CLOUDINARY_API_SECRET=your-api-secret
 3. Staff accounts require admin approval before accessing management endpoints
 4. Admin accounts use a fixed password stored in environment variables
 5. JWT access tokens (24h) and refresh tokens (7 days) returned on login/register
-6. All protected endpoints require Authorization: Bearer header
+6. All protected endpoints require an `Authorization: Bearer` header
 
 ---
 
 ## Staff Approval System
 
-1. Staff registers via /api/auth/register/ with role "staff"
-2. Account created with is_approved = false
+1. Staff registers with role `"staff"`
+2. Account created with `is_approved = false`
 3. Staff can login but cannot access staff endpoints
-4. Admin views pending staff at /api/admin/staff/pending/
-5. Admin approves staff at /api/admin/staff/approve/
+4. Admin views the list of pending staff accounts
+5. Admin approves the staff account
 6. Staff can now create, edit, and manage resources
 
 ---
 
 ## M-Pesa Payment Flow
 
-1. Guest books a resource — booking created with status "pending"
-2. Guest sends payment with booking ID to /api/mpesa/pay/
+1. Guest books a resource — booking created with status `"pending"`
+2. Guest sends payment with the booking ID
 3. Reference auto-formatted based on booking type prefix
 4. STK Push sent to customer's phone via Safaricom Daraja API
 5. Customer enters M-Pesa PIN on their phone
-6. Safaricom sends callback to /api/mpesa/callback/
+6. Safaricom sends a callback to the backend
 7. System processes the callback:
-   - Updates MpesaTransaction status to "Completed"
+   - Updates `MpesaTransaction` status to `"Completed"`
    - Extracts booking reference prefix
    - Auto-confirms the corresponding booking
 8. Booking types identified by reference prefix:
-   - BK-{id} = Room booking
-   - TBL-{id} = Table reservation
-   - CONF-{id} = Conference booking
-   - VEN-{id} = Venue booking
+
+   | Prefix | Booking Type |
+   |--------|---------------|
+   | `BK-{id}` | Room booking |
+   | `TBL-{id}` | Table reservation |
+   | `CONF-{id}` | Conference booking |
+   | `VEN-{id}` | Venue booking |
 
 ---
 
@@ -157,10 +183,10 @@ CLOUDINARY_API_SECRET=your-api-secret
 
 All images are uploaded to Cloudinary with organized folder structure:
 
-- hotel/rooms/ — Room images
-- hotel/tables/ — Table images
-- hotel/conference/ — Conference room images
-- hotel/venues/ — Venue images
+- `hotel/rooms/` — Room images
+- `hotel/tables/` — Table images
+- `hotel/conference/` — Conference room images
+- `hotel/venues/` — Venue images
 
 Images are stored on Cloudinary CDN and survive server redeploys.
 
@@ -171,8 +197,14 @@ Images are stored on Cloudinary CDN and survive server redeploys.
 1. Push code to GitHub
 2. Create new Web Service on Render
 3. Connect to GitHub repository
-4. Build command: pip install -r requirements.txt && python manage.py migrate
-5. Start command: gunicorn hotel_project.wsgi:application
+4. Build command:
+   ```bash
+   pip install -r requirements.txt && python manage.py migrate
+   ```
+5. Start command:
+   ```bash
+   gunicorn hotel_project.wsgi:application
+   ```
 6. Add all environment variables in Render dashboard
 7. Deploy
 
@@ -180,12 +212,11 @@ Images are stored on Cloudinary CDN and survive server redeploys.
 
 ## Known Issues
 
-- M-Pesa Sandbox: Safaricom sandbox is unreliable for callbacks. Manual confirmation available as workaround for testing.
-- Django Admin + Python 3.14: Compatibility issue with Django admin templates. Use Python 3.12 for production deployments.
+- **M-Pesa Sandbox:** Safaricom sandbox is unreliable for callbacks. Manual confirmation available as workaround for testing.
+- **Django Admin + Python 3.14:** Compatibility issue with Django admin templates. Use Python 3.12 for production deployments.
 
 ---
 
 ## Author
 
-Shawn Ajamala
-
+**Shawn Ajamala**
