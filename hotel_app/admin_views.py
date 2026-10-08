@@ -12,7 +12,7 @@ from .models import (
     ConferenceRoom, ConferenceBooking, Venue, VenueBooking,
     CancellationRequest, Refund
 )
-from .permissions import IsAdmin
+from .permissions import IsAdmin, AdminBootstrapPermission
 import random
 import string
 
@@ -195,7 +195,8 @@ class AdminAnalyticsView(APIView):
 
 ### ==================== CREATE ADMIN (FIRST TIME ONLY) ====================
 class CreateAdminView(APIView):
-    permission_classes = [AllowAny]
+    authentication_classes = []
+    permission_classes = [AdminBootstrapPermission]
 
     def post(self, request):
         # Check if admin already exists
