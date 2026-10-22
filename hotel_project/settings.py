@@ -24,7 +24,7 @@ ALLOWED_HOSTS = config(
 
 CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS',
-    default='https://balcony-tumble-smell.ngrok-free.dev,https://final-capstone-2puq.onrender.com',
+    default='https://balcony-tumble-smell.ngrok-free.dev,https://final-capstone-lt3j.onrender.com',
     cast=lambda value: [origin.strip() for origin in value.split(',') if origin.strip()],
 )
 
