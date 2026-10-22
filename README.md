@@ -2,7 +2,7 @@
 
 Django REST Framework backend for a complete hotel management system with M-Pesa payment integration.
 
-**Live API:** https://final-capstone-2puq.onrender.com
+**Live API:** https://final-capstone-lt3j.onrender.com
 
 **GitHub:** https://github.com/ShawnAjamala/final_capstone
 
