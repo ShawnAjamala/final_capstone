@@ -18,7 +18,7 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
-    default='localhost,127.0.0.1,.ngrok-free.app,.ngrok-free.dev,final-capstone-2puq.onrender.com',
+    default='localhost,127.0.0.1,.ngrok-free.app,.ngrok-free.dev,final-capstone-lt3j.onrender.com',
     cast=lambda value: [host.strip() for host in value.split(',') if host.strip()],
 )
 
