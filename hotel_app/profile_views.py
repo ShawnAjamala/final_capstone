@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from .permissions import get_user_role
 
 
 ### ==================== GET PROFILE ====================
@@ -18,8 +19,8 @@ class GetProfileView(APIView):
                 'id': user.id,
                 'username': user.username,
                 'email': user.email,
-                'role': profile.role if profile else 'guest',
-                'is_approved': profile.is_approved if profile else False,
+                'role': get_user_role(user),
+                'is_approved': user.is_superuser or (profile.is_approved if profile else False),
                 'initials': initials,
                 'date_joined': user.date_joined,
             }

@@ -12,6 +12,13 @@ def get_user_profile(user):
         return None
 
 
+def get_user_role(user):
+    if getattr(user, 'is_superuser', False):
+        return 'admin'
+    profile = get_user_profile(user)
+    return profile.role if profile else 'guest'
+
+
 ### ==================== ROLE-BASED PERMISSIONS ====================
 # Run AFTER JWT authentication validates the token.
 # Staff additionally checks is_approved — can register/login
@@ -19,11 +26,9 @@ def get_user_profile(user):
 
 class IsGuest(BasePermission):
     def has_permission(self, request, view):
-        profile = get_user_profile(request.user)
         return (
             request.user.is_authenticated and
-            profile is not None and
-            profile.role == 'guest'
+            get_user_role(request.user) == 'guest'
         )
 
 
@@ -41,12 +46,7 @@ class IsStaff(BasePermission):
 
 class IsAdmin(BasePermission):
     def has_permission(self, request, view):
-        profile = get_user_profile(request.user)
-        return (
-            request.user.is_authenticated and
-            profile is not None and
-            profile.role == 'admin'
-        )
+        return request.user.is_authenticated and get_user_role(request.user) == 'admin'
 
 
 class IsAdminOrStaff(BasePermission):
@@ -55,6 +55,8 @@ class IsAdminOrStaff(BasePermission):
         if not request.user.is_authenticated:
             return False
         profile = get_user_profile(request.user)
+        if getattr(request.user, 'is_superuser', False):
+            return True
         if profile is None:
             return False
         if profile.role == 'admin':

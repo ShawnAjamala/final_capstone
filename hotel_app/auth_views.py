@@ -7,14 +7,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.renderers import JSONRenderer, BrowsableAPIRenderer
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserProfile
-from .permissions import IsGuest, IsStaff, IsAdmin
+from .permissions import IsGuest, IsStaff, IsAdmin, get_user_role
 from .serializers import RegisterSerializer, LoginSerializer
 
 
 ### ==================== JWT TOKEN HELPER ====================
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
-    refresh['role'] = user.profile.role if hasattr(user, 'profile') else 'guest'
+    refresh['role'] = get_user_role(user)
     return {'refresh': str(refresh), 'access': str(refresh.access_token)}
 
 
@@ -137,7 +137,7 @@ class LoginView(APIView):
         # Check if user is approved (for staff)
         try:
             profile = UserProfile.objects.get(user=user)
-            if profile.role in ['staff', 'admin'] and not profile.is_approved:
+            if not user.is_superuser and profile.role in ['staff', 'admin'] and not profile.is_approved:
                 return Response(
                     {'error': 'Your account is pending approval. Please wait for admin approval.'},
                     status=status.HTTP_403_FORBIDDEN
@@ -149,7 +149,7 @@ class LoginView(APIView):
             must_change_password = False
 
         tokens = get_tokens_for_user(user)
-        role = user.profile.role if hasattr(user, 'profile') else 'guest'
+        role = get_user_role(user)
 
         return Response({
             'message': 'Login successful',
@@ -178,7 +178,7 @@ class CurrentUserView(APIView):
 
     def get(self, request):
         user = request.user
-        role = user.profile.role if hasattr(user, 'profile') else 'guest'
+        role = get_user_role(user)
         must_change_password = user.profile.must_change_password if hasattr(user, 'profile') else False
         return Response({
             'user': {
