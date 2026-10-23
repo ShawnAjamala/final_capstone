@@ -18,6 +18,36 @@ class EndpointProtectionTests(TestCase):
         response = self.client.get('/api/admin/dashboard/')
         self.assertEqual(response.status_code, 401)
 
+    def test_profile_and_private_role_routes_require_authentication(self):
+        requests = [
+            self.client.get('/api/auth/me/'),
+            self.client.get('/api/profile/'),
+            self.client.post('/api/profile/update-password/', {}, format='json'),
+            self.client.post('/api/profile/delete-account/', {}, format='json'),
+            self.client.get('/api/guest/dashboard/'),
+            self.client.get('/api/staff/dashboard/'),
+            self.client.get('/api/admin/dashboard/'),
+            self.client.get('/api/admin/users/'),
+            self.client.get('/api/staff/analytics/'),
+            self.client.get('/api/rooms/my-bookings/'),
+            self.client.post('/api/rooms/book/', {}, format='json'),
+        ]
+
+        self.assertTrue(all(response.status_code == 401 for response in requests))
+
+    def test_mpesa_test_page_is_not_public(self):
+        self.assertEqual(self.client.get('/mpesa-test/').status_code, 401)
+
+    def test_public_catalog_reads_remain_open(self):
+        for endpoint in (
+            '/api/rooms/',
+            '/api/tables/',
+            '/api/conference/',
+            '/api/venues/',
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.assertEqual(self.client.get(endpoint).status_code, 200)
+
     def test_create_admin_route_requires_bootstrap_secret(self):
         os.environ['BOOTSTRAP_ADMIN_SECRET'] = 'test-secret'
         response = self.client.post(
@@ -89,6 +119,7 @@ class RoleAccessTests(TestCase):
         self.assertEqual(self.client.get('/api/guest/dashboard/').status_code, 200)
         self.assertEqual(self.client.get('/api/staff/dashboard/').status_code, 403)
         self.assertEqual(self.client.get('/api/admin/dashboard/').status_code, 403)
+        self.assertEqual(self.client.get('/mpesa-test/').status_code, 403)
 
     def test_staff_cannot_open_guest_or_admin_dashboards(self):
         user = User.objects.create_user(username='staff', password='pass12345')

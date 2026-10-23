@@ -1,6 +1,8 @@
 from django.urls import path, include
 from django.http import JsonResponse
 from django.shortcuts import render
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from hotel_app import room_views, table_views, conference_views, venue_views, staff_views, refund_views
 from hotel_app.auth_views import (
     RegisterView, LoginView, LogoutView, CurrentUserView,
@@ -15,6 +17,7 @@ from hotel_app.admin_views import (
     AdminChangeStaffPasswordView, AdminAnalyticsView
 )
 from hotel_app import profile_views
+from hotel_app.permissions import IsAdminOrStaff
 
 
 ### ==================== PUBLIC DASHBOARD ====================
@@ -31,6 +34,8 @@ def public_dashboard(request):
 
 
 ### ==================== MPESA TEST PAGE ====================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdminOrStaff])
 def mpesa_test_page(request):
     return render(request, "mpesa_test.html")
 
