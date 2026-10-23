@@ -4,63 +4,115 @@ import logging
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from requests import RequestException
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from .models import MpesaTransaction, Booking, TableBooking, ConferenceBooking, VenueBooking
-from .mpesa import initiate_stk_push
+from .mpesa import initiate_stk_push, query_stk_push
+from .permissions import IsGuest
 
 logger = logging.getLogger(__name__)
 
+BOOKING_MODELS = {
+    "BK": Booking,
+    "TBL": TableBooking,
+    "CONF": ConferenceBooking,
+    "VEN": VenueBooking,
+}
+
+
+def get_booking_from_reference(reference):
+    if not isinstance(reference, str):
+        return None
+
+    prefix, separator, booking_id = reference.partition("-")
+    model = BOOKING_MODELS.get(prefix)
+    if not separator or model is None or not booking_id.isdecimal():
+        return None
+
+    try:
+        return model.objects.get(id=int(booking_id))
+    except model.DoesNotExist:
+        return None
+
 
 ### ==================== INITIATE M-PESA PAYMENT ====================
-@csrf_exempt
-@require_POST
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsGuest])
 def initiate_payment(request):
-    try:
-        body         = json.loads(request.body)
-        phone_number = body.get("phone_number", "").strip()
-        amount       = body.get("amount")
-        reference    = body.get("reference", "HotelBooking")
-        description  = body.get("description", "Hotel Booking Payment")
-        booking_id   = body.get("booking_id")
+    phone_number = request.data.get("phone_number", "")
+    reference = request.data.get("booking_id") or request.data.get("reference")
 
-        if not phone_number or not amount:
-            return JsonResponse({"error": "phone_number and amount are required."}, status=400)
-
-        if booking_id:
-            reference = str(booking_id)
-
-        daraja_response = initiate_stk_push(
-            phone_number=phone_number,
-            amount=amount,
-            account_reference=reference,
-            transaction_desc=description,
+    if not isinstance(phone_number, str) or not phone_number.strip() or not reference:
+        return Response(
+            {"error": "phone_number and booking_id are required."},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
-        if daraja_response.get("ResponseCode") == "0":
-            checkout_request_id = daraja_response["CheckoutRequestID"]
-            MpesaTransaction.objects.create(
-                checkout_request_id=checkout_request_id,
-                phone_number=phone_number,
-                amount=amount,
-                reference=reference,
-                description=description,
-                status="Pending",
-            )
-            return JsonResponse({
-                "status":              "pending",
-                "message":             "STK Push sent. Check your phone.",
-                "checkout_request_id": checkout_request_id,
-                "reference":           reference,
-            })
+    booking = get_booking_from_reference(reference)
+    if (
+        booking is None
+        or booking.guest_id != request.user.id
+        or booking.status != "pending"
+        or booking.payment_status != "unpaid"
+    ):
+        return Response(
+            {"error": "A pending, unpaid booking belonging to you is required."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
-        return JsonResponse({
-            "status":  "error",
-            "message": daraja_response.get("errorMessage", "Unknown error from Daraja."),
-        }, status=502)
+    try:
+        daraja_response = initiate_stk_push(
+            phone_number=phone_number.strip(),
+            amount=booking.total_price,
+            account_reference=reference,
+            transaction_desc="Hotel booking payment",
+        )
+    except RequestException:
+        logger.exception("STK Push failed for booking %s", reference)
+        return Response(
+            {"error": "Unable to initiate M-Pesa payment."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
 
-    except Exception as e:
-        logger.exception("STK Push failed")
-        return JsonResponse({"error": str(e)}, status=500)
+    if str(daraja_response.get("ResponseCode")) != "0":
+        return Response(
+            {
+                "status": "error",
+                "message": daraja_response.get(
+                    "errorMessage", "Unable to initiate M-Pesa payment."
+                ),
+            },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    checkout_request_id = daraja_response.get("CheckoutRequestID")
+    if not checkout_request_id:
+        logger.error("Daraja accepted a payment request without a checkout ID")
+        return Response(
+            {"error": "Unable to initiate M-Pesa payment."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    MpesaTransaction.objects.create(
+        checkout_request_id=checkout_request_id,
+        phone_number=phone_number.strip(),
+        amount=booking.total_price,
+        reference=reference,
+        description="Hotel booking payment",
+        status="Pending",
+    )
+    return Response(
+        {
+            "status": "pending",
+            "message": "STK Push sent. Check your phone.",
+            "checkout_request_id": checkout_request_id,
+            "reference": reference,
+        },
+        status=status.HTTP_201_CREATED,
+    )
 
 
 ### ==================== M-PESA CALLBACK ====================
@@ -74,13 +126,30 @@ def mpesa_callback(request):
         checkout_request_id = stk.get("CheckoutRequestID")
         result_code         = stk.get("ResultCode")
         result_desc         = stk.get("ResultDesc", "")
+        if checkout_request_id is None or result_code is None:
+            logger.warning("Received an incomplete M-Pesa callback")
+            return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
 
         try:
             transaction = MpesaTransaction.objects.get(checkout_request_id=checkout_request_id)
         except MpesaTransaction.DoesNotExist:
             return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
+        if transaction.status != "Pending":
+            return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
 
-        if result_code == 0:
+        verification = query_stk_push(checkout_request_id)
+        verified_result = verification.get("ResultCode")
+        if (
+            str(verification.get("ResponseCode")) != "0"
+            or str(verified_result) != str(result_code)
+        ):
+            logger.warning(
+                "M-Pesa callback verification did not match transaction %s",
+                checkout_request_id,
+            )
+            return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
+
+        if str(result_code) == "0":
             items = stk.get("CallbackMetadata", {}).get("Item", [])
             meta  = {item["Name"]: item.get("Value") for item in items}
             transaction.status        = "Completed"
@@ -90,7 +159,7 @@ def mpesa_callback(request):
 
             _confirm_booking(transaction)
 
-        elif result_code == 1032:
+        elif str(result_code) == "1032":
             transaction.status      = "Cancelled"
             transaction.result_desc = result_desc
             transaction.save()
@@ -106,20 +175,23 @@ def mpesa_callback(request):
 
 
 ### ==================== CHECK PAYMENT STATUS ====================
-@csrf_exempt
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsGuest])
 def payment_status(request, checkout_request_id):
     try:
         tx = MpesaTransaction.objects.get(checkout_request_id=checkout_request_id)
-        return JsonResponse({
+        booking = get_booking_from_reference(tx.reference)
+        if booking is None or booking.guest_id != request.user.id:
+            return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
             "status":        tx.status,
             "mpesa_receipt": tx.mpesa_receipt,
             "result_desc":   tx.result_desc,
             "amount":        str(tx.amount),
-            "phone_number":  tx.phone_number,
             "reference":     tx.reference,
         })
     except MpesaTransaction.DoesNotExist:
-        return JsonResponse({"error": "Transaction not found."}, status=404)
+        return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
 ### ==================== HELPER: CONFIRM ANY BOOKING TYPE ====================
